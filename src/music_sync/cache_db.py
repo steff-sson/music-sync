@@ -201,6 +201,82 @@ class UnifiedTrackCache:
                     )
                 )
 
+    def store_tidal_tracks_batch(self, tracks: list[dict]):
+        """
+        Batch insert/update Tidal tracks for better performance.
+        tracks: list of dicts with keys: tidal_id, name, artists, album, isrc, duration, track_num
+        """
+        if not tracks:
+            return
+        values = []
+        now = datetime.datetime.now()
+        for t in tracks:
+            values.append(
+                {
+                    "tidal_id": t["tidal_id"],
+                    "tidal_name": t["name"],
+                    "tidal_artists": json.dumps(t["artists"]),
+                    "tidal_album": t.get("album"),
+                    "tidal_isrc": t.get("isrc"),
+                    "tidal_duration": t.get("duration"),
+                    "tidal_track_num": t.get("track_num"),
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+        with self.engine.connect() as conn:
+            with conn.begin():
+                conn.execute(insert(self.tracks), values)
+
+    def store_spotify_tracks_batch(self, tracks: list[dict]):
+        """
+        Batch insert/update Spotify tracks for better performance.
+        tracks: list of dicts with keys: spotify_id, name, artists, album, isrc, duration
+        """
+        if not tracks:
+            return
+        values = []
+        now = datetime.datetime.now()
+        for t in tracks:
+            values.append(
+                {
+                    "spotify_id": t["spotify_id"],
+                    "spotify_name": t["name"],
+                    "spotify_artists": json.dumps(t["artists"]),
+                    "spotify_album": t.get("album"),
+                    "spotify_isrc": t.get("isrc"),
+                    "spotify_duration": t.get("duration"),
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+        with self.engine.connect() as conn:
+            with conn.begin():
+                conn.execute(insert(self.tracks), values)
+
+    def store_matches_batch(self, matches: list[dict]):
+        """
+        Batch insert/update matches for better performance.
+        matches: list of dicts with keys: tidal_id, spotify_id, confidence, method
+        """
+        if not matches:
+            return
+        now = datetime.datetime.now()
+        with self.engine.connect() as conn:
+            with conn.begin():
+                for m in matches:
+                    conn.execute(
+                        update(self.tracks)
+                        .where(self.tracks.c.tidal_id == m["tidal_id"])
+                        .values(
+                            spotify_id=m["spotify_id"],
+                            match_confidence=m["confidence"],
+                            match_method=m["method"],
+                            matched_at=now,
+                            updated_at=now,
+                        )
+                    )
+
     def get_by_tidal_id(self, tidal_id: str) -> dict | None:
         """Get track data by Tidal ID"""
         with self.engine.connect() as conn:

@@ -4,10 +4,13 @@ import sys
 
 from . import sync as _sync
 from . import auth as _auth
+from .sync_engine import sync_engine
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="music-sync - Bidirectional sync between Spotify and Tidal"
+    )
     parser.add_argument(
         "--config", default="config.yml", help="location of the config file"
     )
@@ -25,11 +28,44 @@ def main():
         help="sync from Tidal to Spotify instead of Spotify to Tidal",
     )
     parser.add_argument(
+        "--spotify-to-tidal",
+        action="store_true",
+        help="sync from Spotify to Tidal (default behavior)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="show what would be done without making changes",
     )
+    parser.add_argument(
+        "--force-refresh",
+        action="store_true",
+        help="ignore cache and refresh all matches",
+    )
+
+    parser.add_argument(
+        "direction",
+        nargs="*",
+        help="direction: tidal spotify OR spotify tidal",
+    )
+
     args = parser.parse_args()
+
+    direction = args.direction if hasattr(args, "direction") else []
+
+    with open(args.config, "r") as f:
+        config = yaml.safe_load(f)
+
+    if len(direction) == 2:
+        input_platform, output_platform = direction
+        if input_platform == "tidal" and output_platform == "spotify":
+            args.tidal_to_spotify = True
+        elif input_platform == "spotify" and output_platform == "tidal":
+            args.tidal_to_spotify = False
+        else:
+            sys.exit(
+                f"Invalid direction: {input_platform} {output_platform}. Use 'tidal spotify' or 'spotify tidal'"
+            )
 
     with open(args.config, "r") as f:
         config = yaml.safe_load(f)
