@@ -1,17 +1,19 @@
-# Agent Instructions for spotify_to_tidal
+# Agent Instructions for music-sync
 
 This file provides guidance for agentic coding agents working in this repository.
 
 ## Project Overview
 
-A Python CLI tool for importing Spotify playlists into Tidal. Uses async/await patterns for concurrent API operations.
+A Python CLI tool for bidirectional synchronization between Spotify and Tidal. Uses async/await patterns for concurrent API operations.
+
+Supports Spotify → Tidal and Tidal → Spotify sync.
 
 ## Build, Lint, and Test Commands
 
 ### Installation (Development)
 ```bash
 pip install -e .          # Install package in editable mode
-pip install -e ".[dev]"    # Install with dev dependencies (if defined)
+pip install -r requirements.txt  # Install dependencies
 ```
 
 ### Running Tests
@@ -25,19 +27,15 @@ pytest -v                    # Run with verbose output
 pytest -k "test_name"        # Run tests matching pattern
 ```
 
-### Package Management
-```bash
-pip install -r Pipfile       # Install from Pipfile.lock
-pip freeze > requirements.txt # Export dependencies (if needed)
-```
-
 ### Running the Application
 ```bash
-spotify_to_tidal                              # Run with config.yml in working directory
-python -m spotify_to_tidal                   # Alternative invocation
-spotify_to_tidal --config path/to/config.yml # Custom config location
-spotify_to_tidal --uri <playlist_uri>         # Sync specific playlist
-spotify_to_tidal --sync-favorites            # Sync liked songs only
+music-sync                              # Run with config.yml in working directory (Spotify → Tidal)
+python -m music_sync                   # Alternative invocation
+music-sync --config path/to/config.yml # Custom config location
+music-sync --uri <playlist_uri>         # Sync specific playlist
+music-sync --sync-favorites            # Sync liked songs
+music-sync --tidal-to-spotify           # Sync from Tidal to Spotify
+music-sync --tidal-to-spotify --dry-run # Preview Tidal → Spotify sync
 ```
 
 ## Code Style Guidelines
@@ -48,14 +46,14 @@ spotify_to_tidal --sync-favorites            # Sync liked songs only
 - Follow existing patterns in the codebase
 
 ### Type Annotations
-- Use `TypedDict` for structured dict types (see `src/spotify_to_tidal/type/`)
+- Use `TypedDict` for structured dict types (see `src/music_sync/type/`)
 - Use `typing` module imports: `TypedDict`, `List`, `Dict`, `Mapping`, `Sequence`, `Set`, `Optional`, `Callable`
 - Union types: prefer `X | Y` syntax over `Union[X, Y]` for Python 3.10+
 - Use `X | None` syntax (not `Optional[X]`)
 
 ### Imports
 - Standard library first, then third-party, then local
-- Use absolute imports within package: `from spotify_to_tidal import sync`
+- Use absolute imports within package: `from music_sync import sync`
 - Relative imports for internal modules: `from . import auth`
 - Group by type with blank lines between groups
 
@@ -102,7 +100,7 @@ rate_limiter_task.cancel()
 
 ### Module Structure
 ```
-src/spotify_to_tidal/
+src/music_sync/
   __main__.py      # CLI entry point
   auth.py          # Authentication (Spotify/Tidal sessions)
   sync.py          # Core sync logic (async)

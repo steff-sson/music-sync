@@ -6,16 +6,16 @@ import tidalapi
 import yaml
 import sys
 from unittest import mock
-from spotify_to_tidal.auth import open_spotify_session, open_tidal_session, SPOTIFY_SCOPES
+from music_sync.auth import open_spotify_session, open_tidal_session, SPOTIFY_SCOPES
 
 
 def test_open_spotify_session(mocker):
     # Mock the SpotifyOAuth class
     mock_spotify_oauth = mocker.patch(
-        "spotify_to_tidal.auth.spotipy.SpotifyOAuth", autospec=True
+        "music_sync.auth.spotipy.SpotifyOAuth", autospec=True
     )
     mock_spotify_instance = mocker.patch(
-        "spotify_to_tidal.auth.spotipy.Spotify", autospec=True
+        "music_sync.auth.spotipy.Spotify", autospec=True
     )
 
     # Define a mock configuration
@@ -53,7 +53,7 @@ def test_open_spotify_session(mocker):
 def test_open_spotify_session_oauth_error(mocker):
     # Mock the SpotifyOAuth class and simulate an OAuth error
     mock_spotify_oauth = mocker.patch(
-        "spotify_to_tidal.auth.spotipy.SpotifyOAuth", autospec=True
+        "music_sync.auth.spotipy.SpotifyOAuth", autospec=True
     )
     mock_spotify_oauth.return_value.get_access_token.side_effect = (
         spotipy.SpotifyOauthError("mock error")

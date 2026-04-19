@@ -3,7 +3,7 @@ requires = ["setuptools >= 61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "spotify_to_tidal"
+name = "music-sync"
 version = "1.0.7"
 requires-python = ">= 3.10"
 
@@ -17,9 +17,9 @@ dependencies = [
   "pytest-mock~=3.8"
 ]
 
-[tools.setuptools.packages."spotify_to_tidal"]
+[tools.setuptools.packages."music_sync"]
 where = "src"
-include = "spotify_to_tidal*"
+include = "music_sync*"
 
 [project.scripts]
-spotify_to_tidal = "spotify_to_tidal.__main__:main"
+music-sync = "music_sync.__main__:main"

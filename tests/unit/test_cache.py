@@ -5,7 +5,7 @@ import datetime
 import sqlalchemy
 from sqlalchemy import create_engine, select
 from unittest import mock
-from spotify_to_tidal.cache import MatchFailureDatabase, TrackMatchCache
+from music_sync.cache import MatchFailureDatabase, TrackMatchCache
 
 
 # Setup an in-memory SQLite database for testing
@@ -17,9 +17,7 @@ def in_memory_db():
 
 # Test MatchFailureDatabase
 def test_cache_match_failure(in_memory_db, mocker):
-    mocker.patch(
-        "spotify_to_tidal.cache.sqlalchemy.create_engine", return_value=in_memory_db
-    )
+    mocker.patch("music_sync.cache.sqlalchemy.create_engine", return_value=in_memory_db)
     failure_db = MatchFailureDatabase()
 
     track_id = "test_track"
@@ -36,9 +34,7 @@ def test_cache_match_failure(in_memory_db, mocker):
 
 
 def test_has_match_failure(in_memory_db, mocker):
-    mocker.patch(
-        "spotify_to_tidal.cache.sqlalchemy.create_engine", return_value=in_memory_db
-    )
+    mocker.patch("music_sync.cache.sqlalchemy.create_engine", return_value=in_memory_db)
     failure_db = MatchFailureDatabase()
 
     track_id = "test_track"
@@ -48,9 +44,7 @@ def test_has_match_failure(in_memory_db, mocker):
 
 
 def test_remove_match_failure(in_memory_db, mocker):
-    mocker.patch(
-        "spotify_to_tidal.cache.sqlalchemy.create_engine", return_value=in_memory_db
-    )
+    mocker.patch("music_sync.cache.sqlalchemy.create_engine", return_value=in_memory_db)
     failure_db = MatchFailureDatabase()
 
     track_id = "test_track"

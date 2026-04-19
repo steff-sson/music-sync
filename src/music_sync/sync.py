@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import asyncio
-from .cache import failure_cache, track_match_cache
+from .cache import failure_cache, track_match_cache, reverse_failure_cache
 import datetime
 from difflib import SequenceMatcher
 from functools import partial
@@ -194,7 +194,6 @@ async def tidal_search(
 
 
 async def repeat_on_request_error(function, *args, remaining=5, **kwargs):
-    # utility to repeat calling the function up to 5 times if an exception is thrown
     try:
         return await function(*args, **kwargs)
     except (
@@ -207,26 +206,42 @@ async def repeat_on_request_error(function, *args, remaining=5, **kwargs):
         else:
             print(f"{str(e)} could not be recovered")
 
+        retry_after = None
         if (
+            isinstance(e, spotipy.exceptions.SpotifyException)
+            and e.response is not None
+        ):
+            if e.http_status == 429:
+                retry_after = e.response.headers.get("Retry-After")
+                if retry_after:
+                    print(f"Spotify rate limit hit, Retry-After: {retry_after}s")
+        elif (
             isinstance(e, requests.exceptions.RequestException)
-            and not e.response is None
+            and e.response is not None
         ):
             print(f"Response message: {e.response.text}")
             print(f"Response headers: {e.response.headers}")
+            retry_after = e.response.headers.get("Retry-After")
 
         if not remaining:
             print("Aborting sync")
             print(f"The following arguments were provided:\n\n {str(args)}")
             print(traceback.format_exc())
             sys.exit(1)
-        sleep_schedule = {
-            5: 1,
-            4: 10,
-            3: 60,
-            2: 5 * 60,
-            1: 10 * 60,
-        }  # sleep variable length of time depending on retry number
-        time.sleep(sleep_schedule.get(remaining, 1))
+
+        if retry_after:
+            sleep_time = max(int(retry_after), 1)
+        else:
+            sleep_schedule = {
+                5: 1,
+                4: 10,
+                3: 60,
+                2: 5 * 60,
+                1: 10 * 60,
+            }
+            sleep_time = sleep_schedule.get(remaining, 1)
+
+        time.sleep(sleep_time)
         return await repeat_on_request_error(
             function, *args, remaining=remaining - 1, **kwargs
         )
@@ -726,31 +741,39 @@ async def spotify_search(
     def _search_by_isrc():
         if tidal_track.isrc:
             result = spotify_session.search(
-                query=f"isrc:{tidal_track.isrc}", type="track", limit=5
+                f"isrc:{tidal_track.isrc}", type="track", limit=5
             )
             for track in result["tracks"]["items"]:
                 if reverse_match(track, tidal_track):
                     return track["id"]
 
     def _search_by_album():
-        if tidal_track.album and tidal_track.track_number:
+        if tidal_track.album and tidal_track.track_num:
             album_name = (
                 simple(tidal_track.album.name) if tidal_track.album.name else ""
             )
             if tidal_track.artists:
                 query = f"{album_name} {simple(tidal_track.artists[0].name)}"
-                album_result = spotify_session.search(
-                    query=query, type="album", limit=10
-                )
+                album_result = spotify_session.search(query, type="album", limit=10)
                 for album in album_result["albums"]["items"]:
-                    if tidal_track.track_number <= len(album["tracks"]["items"]):
-                        track = album["tracks"]["items"][tidal_track.track_number - 1]
+                    tracks_page = getattr(album, "tracks", None) or album.get(
+                        "tracks", {}
+                    )
+                    if callable(tracks_page):
+                        tracks_items = tracks_page()
+                    elif isinstance(tracks_page, dict):
+                        tracks_items = tracks_page.get("items", [])
+                    else:
+                        tracks_items = getattr(tracks_page, "items", [])
+                    track_num = tidal_track.track_num
+                    if track_num <= len(tracks_items):
+                        track = tracks_items[track_num - 1]
                         if reverse_match(track, tidal_track):
                             return track["id"]
 
     def _search_by_track_artist():
         query = f"{simple(tidal_track.name)} {simple(tidal_track.artists[0].name)}"
-        result = spotify_session.search(query=query, type="track", limit=10)
+        result = spotify_session.search(query, type="track", limit=10)
         for track in result["tracks"]["items"]:
             if reverse_match(track, tidal_track):
                 return track["id"]
@@ -758,15 +781,21 @@ async def spotify_search(
     await rate_limiter.acquire()
     isrc_result = await asyncio.to_thread(_search_by_isrc)
     if isrc_result:
+        reverse_failure_cache.remove_match_failure(tidal_track.id)
         return isrc_result
 
     await rate_limiter.acquire()
     album_result = await asyncio.to_thread(_search_by_album)
     if album_result:
+        reverse_failure_cache.remove_match_failure(tidal_track.id)
         return album_result
 
     await rate_limiter.acquire()
     track_result = await asyncio.to_thread(_search_by_track_artist)
+    if track_result:
+        reverse_failure_cache.remove_match_failure(tidal_track.id)
+    else:
+        reverse_failure_cache.cache_match_failure(tidal_track.id)
     return track_result
 
 
@@ -778,29 +807,46 @@ async def search_new_tracks_on_spotify(
     dry_run: bool = False,
 ):
     async def _run_rate_limiter(semaphore):
-        _sleep_time = (
-            config.get("max_concurrency", 10) / config.get("rate_limit", 10) / 4
-        )
+        rate = config.get("rate_limit", 8)
+        _sleep_time = rate / 4
         t0 = datetime.datetime.now()
         while True:
             await asyncio.sleep(_sleep_time)
             t = datetime.datetime.now()
             dt = (t - t0).total_seconds()
-            new_items = round(config.get("rate_limit", 10) * dt)
+            new_items = round(rate * dt)
             t0 = t
-            [semaphore.release() for i in range(new_items)]
+            for i in range(new_items):
+                try:
+                    semaphore.release()
+                except RuntimeError:
+                    pass
 
-    semaphore = asyncio.Semaphore(config.get("max_concurrency", 10))
+    tracks_to_search = [
+        t for t in tidal_tracks if not reverse_failure_cache.has_match_failure(t.id)
+    ]
+    if len(tracks_to_search) < len(tidal_tracks):
+        skipped = len(tidal_tracks) - len(tracks_to_search)
+        print(f"Skipping {skipped} previously failed tracks")
+
+    semaphore = asyncio.Semaphore(config.get("max_concurrency", 8))
     rate_limiter_task = asyncio.create_task(_run_rate_limiter(semaphore))
     search_results = await atqdm.gather(
         *[
             repeat_on_request_error(spotify_search, t, semaphore, spotify_session)
-            for t in tidal_tracks
+            for t in tracks_to_search
         ],
         desc=f"Searching Spotify for {description}",
     )
     rate_limiter_task.cancel()
-    return search_results
+
+    results_map = {}
+    for idx, track in enumerate(tracks_to_search):
+        results_map[track.id] = search_results[idx]
+    for track in tidal_tracks:
+        if track.id not in results_map:
+            results_map[track.id] = None
+    return [results_map[t.id] for t in tidal_tracks]
 
 
 async def get_tidal_playlist_tracks(
