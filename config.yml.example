@@ -1,0 +1,56 @@
+# =============================================================================
+# SPOTIFY TO TIDAL / TIDAL TO SPOTIFY SYNC CONFIGURATION
+# Copy this file to config.yml and fill in your credentials
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# SPOTIFY CREDENTIALS
+# Get these from: https://developer.spotify.com/dashboard/
+# Create an app, then go to "Edit Settings" -> "Redirect URIs"
+# Add: http://127.0.0.1:8888/callback
+# -----------------------------------------------------------------------------
+spotify:
+  client_id: YOUR_SPOTIFY_CLIENT_ID          # e.g. "b21a3c0046f94b1bba920d398420e378"
+  client_secret: YOUR_SPOTIFY_CLIENT_SECRET    # e.g. "be342d78bac24a9fa524abe3ceeb4d49"
+  username: YOUR_SPOTIFY_USERNAME             # e.g. "1234567890"
+  redirect_uri: http://127.0.0.1:8888/callback # Must match Spotify app settings
+  open_browser: true                          # Set to false for headless servers
+
+# -----------------------------------------------------------------------------
+# TIDAL CREDENTIALS
+# These are stored automatically after first login in .session.yml
+# No manual configuration needed unless you want to use specific tokens
+# -----------------------------------------------------------------------------
+# tidal:
+#   access_token: AUTO_GENERATED
+#   refresh_token: AUTO_GENERATED
+#   session_id: AUTO_GENERATED
+
+# -----------------------------------------------------------------------------
+# PLAYLIST SYNC OPTIONS
+# -----------------------------------------------------------------------------
+
+# Sync specific playlists only (uncomment and configure)
+#sync_playlists:
+#  - spotify_id: "1ABCDEqsABCD6EaABCDa0a"      # Spotify playlist ID or full URI
+#    tidal_id: "a0b1234-0a1b-012a-abcd-a1b234c5d6d7"  # Tidal playlist UUID
+
+# Exclude certain playlists from full sync
+#excluded_playlists:
+#  - spotify:playlist:1ABCDEqsABCD6EaABCDa0a   # Full Spotify URI format
+
+# -----------------------------------------------------------------------------
+# FAVORITES SYNC
+# -----------------------------------------------------------------------------
+# Default behavior for syncing favorites when no CLI flags provided:
+#   - true:  sync favorites automatically
+#   - false: only sync with --sync-favorites flag
+sync_favorites_default: true
+
+# -----------------------------------------------------------------------------
+# PERFORMANCE SETTINGS
+# -----------------------------------------------------------------------------
+# Adjust these based on your API rate limits and network speed
+
+max_concurrency: 10   # Max parallel API requests (higher = faster, but risks 429 errors)
+rate_limit: 10       # Max sustained requests per second
