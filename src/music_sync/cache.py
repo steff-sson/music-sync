@@ -109,3 +109,12 @@ class TrackMatchCache:
 failure_cache = MatchFailureDatabase()
 track_match_cache = TrackMatchCache()
 reverse_failure_cache = MatchFailureDatabase()
+
+from .cache_db import unified_cache
+
+__all__ = [
+    "failure_cache",
+    "track_match_cache",
+    "reverse_failure_cache",
+    "unified_cache",
+]
