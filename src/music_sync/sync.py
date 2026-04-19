@@ -215,6 +215,14 @@ async def repeat_on_request_error(function, *args, remaining=5, **kwargs):
         if isinstance(e, spotipy.exceptions.SpotifyException):
             if e.http_status == 429:
                 print(f"Spotify rate limit hit (429)")
+                if "rate_limit_state" in globals():
+                    rate_limit_state["consecutive_429s"] += 1
+                    backoff_seconds = min(
+                        30 * (2 ** rate_limit_state["consecutive_429s"]), 300
+                    )
+                    now = time.time()
+                    rate_limit_state["cooldown_until"] = now + backoff_seconds
+                    print(f"Entering cooldown for {backoff_seconds}s")
         elif (
             isinstance(e, requests.exceptions.RequestException)
             and e.response is not None
@@ -806,11 +814,19 @@ async def search_new_tracks_on_spotify(
     config: dict,
     dry_run: bool = False,
 ):
+    rate_limit_state = {"cooldown_until": 0, "consecutive_429s": 0}
+
     async def _run_rate_limiter(semaphore):
-        rate = config.get("rate_limit", 5)
+        rate = config.get("rate_limit", 3)
+        base_rate = rate
         _sleep_time = rate / 4
         t0 = datetime.datetime.now()
         while True:
+            now = time.time()
+            if rate_limit_state["cooldown_until"] > now:
+                sleep_duration = rate_limit_state["cooldown_until"] - now
+                await asyncio.sleep(min(sleep_duration, 1.0))
+                continue
             await asyncio.sleep(_sleep_time)
             t = datetime.datetime.now()
             dt = (t - t0).total_seconds()
@@ -822,7 +838,19 @@ async def search_new_tracks_on_spotify(
                 except RuntimeError:
                     pass
 
-    semaphore = asyncio.Semaphore(config.get("max_concurrency", 5))
+    def _on_429():
+        now = time.time()
+        rate_limit_state["consecutive_429s"] += 1
+        backoff_seconds = min(30 * (2 ** rate_limit_state["consecutive_429s"]), 300)
+        rate_limit_state["cooldown_until"] = now + backoff_seconds
+        print(
+            f"Rate limit hit! Entering cooldown for {backoff_seconds}s (consecutive: {rate_limit_state['consecutive_429s']})"
+        )
+
+    async def _check_and_handle_429(semaphore):
+        pass
+
+    semaphore = asyncio.Semaphore(config.get("max_concurrency", 3))
     rate_limiter_task = asyncio.create_task(_run_rate_limiter(semaphore))
 
     tracks_to_search = [

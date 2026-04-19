@@ -52,5 +52,5 @@ sync_favorites_default: true
 # -----------------------------------------------------------------------------
 # Adjust these based on your API rate limits and network speed
 
-max_concurrency: 10   # Max parallel API requests (higher = faster, but risks 429 errors)
-rate_limit: 10       # Max sustained requests per second
+max_concurrency: 3   # Max parallel API requests (higher = faster, but risks 429 errors)
+rate_limit: 3       # Max sustained requests per second (conservative to avoid 429s)
