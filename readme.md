@@ -1,48 +1,92 @@
-A command line tool for importing your Spotify playlists into Tidal. Due to various performance optimisations, it is particularly suited for periodic synchronisation of very large collections.
+# music-sync
 
-Installation
------------
-Clone this git repository and then run:
+A command line tool for **bidirectional synchronization** between Spotify and Tidal. Due to various performance optimizations, it is particularly suited for periodic synchronization of very large collections.
+
+Supports:
+- **Spotify → Tidal**: Import your Spotify playlists into Tidal
+- **Tidal → Spotify**: Import your Tidal playlists into Spotify
+
+## Installation
 
 ```bash
+git clone https://github.com/steff-sson/music-sync.git
+cd music-sync
 python3 -m pip install -e .
 ```
 
-Setup
------
-0. Rename the file example_config.yml to config.yml
-0. Go [here](https://developer.spotify.com/documentation/general/guides/authorization/app-settings/) and register a new app on developer.spotify.com.
-0. Copy and paste your client ID and client secret to the Spotify part of the config file
-0. Copy and paste the value in 'redirect_uri' of the config file to Redirect URIs at developer.spotify.com and press ADD
-0. Enter your Spotify username to the config file
-
-Usage
-----
-To synchronize all of your Spotify playlists with your Tidal account run the following from the project root directory
-Windows ignores python module paths by default, but you can run them using `python3 -m spotify_to_tidal`
+For a new virtual environment:
 
 ```bash
-spotify_to_tidal
+git clone https://github.com/steff-sson/music-sync.git
+cd music-sync
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
 ```
 
-You can also just synchronize a specific playlist by doing the following:
+## Setup
+
+1. Copy `config.yml.example` to `config.yml`
+2. Go to [Spotify Developer Dashboard](https://developer.spotify.com/documentation/general/guides/authorization/app-settings/) and register a new app
+3. Add Redirect URI: `http://127.0.0.1:8888/callback` in your Spotify app settings
+4. Copy your Spotify `client_id` and `client_secret` into `config.yml`
+5. Add your Spotify `username`
+6. On first run, Tidal will open a browser for OAuth login
+
+## Usage
+
+### Spotify → Tidal (default direction)
 
 ```bash
-spotify_to_tidal --uri 1ABCDEqsABCD6EaABCDa0a # accepts playlist id or full playlist uri
+music-sync                              # Sync all playlists
+music-sync --uri 1ABCDEqsABCD6EaABCDa0a  # Sync specific playlist
+music-sync --sync-favorites             # Sync liked songs
 ```
 
-or sync just your 'Liked Songs' with:
+### Tidal → Spotify
 
 ```bash
-spotify_to_tidal --sync-favorites
+music-sync --tidal-to-spotify            # Sync all Tidal playlists to Spotify
+music-sync --tidal-to-spotify --dry-run  # Preview what would be synced
 ```
 
-See example_config.yml for more configuration options, and `spotify_to_tidal --help` for more options.
+### Dry Run
+
+Use `--dry-run` to preview changes before applying them. This shows:
+- Which tracks would be added to new/existing playlists
+- Which tracks couldn't be matched on the target platform
+- Summary report of all pending changes
+
+```bash
+music-sync --tidal-to-spotify --dry-run
+```
+
+## Configuration
+
+See `config.yml.example` for all available options:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `max_concurrency` | Max parallel API requests | 10 |
+| `rate_limit` | Max requests per second | 10 |
+| `sync_favorites_default` | Auto-sync favorites | true |
+| `excluded_playlists` | Skip certain playlists | [] |
+
+## Not Found Tracks
+
+When tracks cannot be matched on the target platform, they are logged to:
+- `songs_not_found.txt` (Spotify → Tidal)
+- `songs_not_found_tidal_to_spotify.txt` (Tidal → Spotify)
+
+## License
+
+AGPL v3 - See [LICENSE](LICENSE)
 
 ---
 
 #### Join our amazing community as a code contributor
 <br><br>
-<a href="https://github.com/spotify2tidal/spotify_to_tidal/graphs/contributors">
-  <img class="dark-light" src="https://contrib.rocks/image?repo=spotify2tidal/spotify_to_tidal&anon=0&columns=25&max=100&r=true" />
+<a href="https://github.com/steff-sson/music-sync/graphs/contributors">
+  <img class="dark-light" src="https://contrib.rocks/image?repo=steff-sson/music-sync&anon=0&columns=25&max=100&r=true" />
 </a>
