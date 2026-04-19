@@ -45,13 +45,15 @@ source .venv/bin/activate && pytest -k "test_name"        # Run tests matching p
 ### Running the Application
 ```bash
 source .venv/bin/activate                              # Activate venv FIRST
-music-sync                              # Run with config.yml in working directory (Spotify → Tidal)
-python -m music_sync                   # Alternative invocation
+music-sync                              # Run with config.yml (Spotify → Tidal, default)
+music-sync tidal spotify                # Tidal → Spotify sync
+music-sync spotify tidal                # Spotify → Tidal sync
+music-sync tidal spotify --dry-run      # Preview Tidal → Spotify sync
+music-sync tidal spotify --dry-run      # Preview Spotify → Tidal sync
 music-sync --config path/to/config.yml # Custom config location
 music-sync --uri <playlist_uri>         # Sync specific playlist
 music-sync --sync-favorites            # Sync liked songs
-music-sync --tidal-to-spotify           # Sync from Tidal to Spotify
-music-sync --tidal-to-spotify --dry-run # Preview Tidal → Spotify sync
+music-sync --tidal-to-spotify --dry-run # Legacy flag (still works)
 ```
 
 ## Code Style Guidelines
@@ -120,7 +122,10 @@ src/music_sync/
   __main__.py      # CLI entry point
   auth.py          # Authentication (Spotify/Tidal sessions)
   sync.py          # Core sync logic (async)
+  sync_engine.py   # Cache-based bidirectional sync engine (new)
+  matcher.py       # Bidirectional matching logic (new)
   cache.py         # SQLAlchemy cache for match failures
+  cache_db.py      # UnifiedTrackCache - SQLite cache for tracks (new)
   tidalapi_patch.py # Patches/wrappers for tidalapi
   type/
     spotify.py     # Spotify TypedDict definitions
@@ -136,5 +141,23 @@ src/music_sync/
 ### Working with External APIs
 - Spotify: uses `spotipy` library
 - Tidal: uses `tidalapi` library
-- Both support rate limiting - respect `max_concurrency` config
+- Both support rate limiting - respect `max_concurrency` config (default: 3)
 - Cache failed lookups to avoid repeated failures
+- **Rate limiting:** Conservative settings (rate_limit=3, max_concurrency=3) to avoid 429 errors
+- **Exponential backoff:** When 429 hit, cooldown starts at 30s and doubles (max 300s)
+
+### Cache and Log Files
+- `.tracks.db` - SQLite database with UnifiedTrackCache (not tracked in git)
+- `songs_not_found_tidal_to_spotify.txt` - Tidal tracks not found on Spotify
+- `songs_not_found_spotify_to_tidal.txt` - Spotify tracks not found on Tidal
+- `.cache.db` - Match failure cache (tracks that couldn't be matched)
+- These files are gitignored
+
+### Current Status (2026-04-19)
+- Tidal → Spotify sync implemented
+- Spotify → Tidal sync implemented
+- UnifiedTrackCache with SQLite backend
+- BidirectionalMatcher for ISRC + fuzzy matching
+- Not-found tracking with user-readable log files
+- Rate limit protection with exponential backoff
+- **PAUSED:** Spotify rate limit hit (78449s). Will resume tomorrow.
