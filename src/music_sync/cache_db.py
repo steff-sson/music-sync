@@ -2,6 +2,7 @@
 
 import datetime
 import json
+import os
 import sqlalchemy
 from sqlalchemy import (
     Table,
@@ -29,8 +30,9 @@ class UnifiedTrackCache:
     Stores track metadata and match information to avoid repeated API searches.
     """
 
-    def __init__(self, filename=".tracks.db"):
+    def __init__(self, filename=".tracks.db", log_dir="."):
         self.engine = sqlalchemy.create_engine(f"sqlite:///{filename}")
+        self.log_dir = log_dir
         meta = MetaData()
 
         self.tracks = Table(
@@ -70,6 +72,18 @@ class UnifiedTrackCache:
             Column("track_count", Integer),
             Column("synced_at", DateTime, default=datetime.datetime.now),
             Column("dry_run", Boolean),
+        )
+
+        self.not_found = Table(
+            "not_found",
+            meta,
+            Column("id", Integer, primary_key=True),
+            Column("direction", String),
+            Column("track_id", String),
+            Column("track_name", String),
+            Column("track_artists", String),
+            Column("isrc", String, nullable=True),
+            Column("searched_at", DateTime, default=datetime.datetime.now),
         )
 
         meta.create_all(self.engine)
@@ -412,6 +426,100 @@ class UnifiedTrackCache:
                 "tidal_only": tidal_only or 0,
                 "spotify_only": spotify_only or 0,
             }
+
+    def cache_not_found(
+        self,
+        direction: str,
+        track_id: str,
+        track_name: str,
+        track_artists: list[str],
+        isrc: str | None = None,
+    ):
+        """Record a track that was not found on the target platform"""
+        with self.engine.connect() as conn:
+            with conn.begin():
+                existing = conn.execute(
+                    select(self.not_found).where(
+                        and_(
+                            self.not_found.c.direction == direction,
+                            self.not_found.c.track_id == track_id,
+                        )
+                    )
+                ).fetchone()
+
+                if not existing:
+                    conn.execute(
+                        insert(self.not_found),
+                        {
+                            "direction": direction,
+                            "track_id": track_id,
+                            "track_name": track_name,
+                            "track_artists": ", ".join(track_artists),
+                            "isrc": isrc,
+                            "searched_at": datetime.datetime.now(),
+                        },
+                    )
+
+    def get_not_found(self, direction: str) -> list[dict]:
+        """Get all tracks not found for a given direction"""
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                select(self.not_found)
+                .where(self.not_found.c.direction == direction)
+                .order_by(self.not_found.c.searched_at.desc())
+            ).fetchall()
+            return [dict(row._mapping) for row in rows]
+
+    def clear_not_found(self, direction: str | None = None):
+        """Clear not found records. If direction is None, clear all."""
+        with self.engine.connect() as conn:
+            with conn.begin():
+                if direction:
+                    conn.execute(
+                        delete(self.not_found).where(
+                            self.not_found.c.direction == direction
+                        )
+                    )
+                else:
+                    conn.execute(delete(self.not_found))
+
+    def log_not_found_to_file(self, direction: str):
+        """
+        Write not found tracks to a log file.
+        Format: songs_not_found_[direction].txt
+        """
+        tracks = self.get_not_found(direction)
+
+        if direction == "tidal_to_spotify":
+            filename = "songs_not_found_tidal_to_spotify.txt"
+            header = "TIDAL TRACKS NOT FOUND ON SPOTIFY"
+        else:
+            filename = "songs_not_found_spotify_to_tidal.txt"
+            header = "SPOTIFY TRACKS NOT FOUND ON TIDAL"
+
+        filepath = os.path.join(self.log_dir, filename)
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write("=" * 60 + "\n")
+            f.write(header + "\n")
+            f.write(
+                f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            )
+            f.write(f"Total: {len(tracks)} tracks\n")
+            f.write("=" * 60 + "\n\n")
+
+            if not tracks:
+                f.write("No tracks missing.\n")
+            else:
+                for i, track in enumerate(tracks, 1):
+                    f.write(f"{i}. {track['track_artists']} - {track['track_name']}\n")
+                    if track.get("isrc"):
+                        f.write(f"   ISRC: {track['isrc']}\n")
+                    f.write(f"   ID: {track['track_id']}\n")
+                    f.write(f"   Searched: {track['searched_at']}\n")
+                    f.write("\n")
+
+        return filepath
 
     def _row_to_dict(self, row) -> dict | None:
         """Convert SQLAlchemy row to dict"""
