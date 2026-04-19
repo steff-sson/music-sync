@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 
 import asyncio
-from .cache import failure_cache, track_match_cache, reverse_failure_cache
+from .cache import (
+    failure_cache,
+    track_match_cache,
+    reverse_failure_cache,
+    unified_cache,
+)
 import datetime
 from difflib import SequenceMatcher
 from functools import partial
@@ -956,19 +961,50 @@ async def sync_tidal_playlist_to_spotify(
     existing_spotify_playlist = spotify_playlists.get(playlist_name, [])
     existing_spotify_track_ids = {t["id"] for t in existing_spotify_playlist if t}
 
+    for tidal_track in tidal_tracks:
+        artists = [a.name for a in tidal_track.artists]
+        unified_cache.store_tidal_track(
+            tidal_id=tidal_track.id,
+            name=tidal_track.name,
+            artists=artists,
+            album=tidal_track.album.name if tidal_track.album else None,
+            isrc=tidal_track.isrc,
+            duration=tidal_track.duration,
+            track_num=tidal_track.track_num,
+        )
+
     search_results = await search_new_tracks_on_spotify(
         spotify_session, tidal_tracks, f"playlist '{playlist_name}'", config
     )
 
     new_spotify_ids = []
+    not_found_tracks = []
     for idx, tidal_track in enumerate(tidal_tracks):
         spotify_id = search_results[idx]
         if spotify_id:
             report.matched_tracks += 1
+            unified_cache.store_match(
+                tidal_id=tidal_track.id,
+                spotify_id=spotify_id,
+                confidence=1.0,
+                method="search",
+            )
             if spotify_id not in existing_spotify_track_ids:
                 new_spotify_ids.append(spotify_id)
         else:
             report.add_not_found(tidal_track)
+            not_found_tracks.append(tidal_track)
+
+    if not_found_tracks:
+        for tidal_track in not_found_tracks:
+            artists = [a.name for a in tidal_track.artists]
+            unified_cache.cache_not_found(
+                direction="tidal_to_spotify",
+                track_id=tidal_track.id,
+                track_name=tidal_track.name,
+                track_artists=artists,
+                isrc=tidal_track.isrc,
+            )
 
     if not new_spotify_ids and not dry_run:
         print(f"No new tracks to add to playlist '{playlist_name}'")
@@ -1033,15 +1069,35 @@ async def sync_tidal_favorites_to_spotify(
 
     report.total_tidal_tracks += len(tidal_tracks)
 
+    print("Storing Tidal tracks in cache...")
+    for tidal_track in tidal_tracks:
+        artists = [a.name for a in tidal_track.artists]
+        unified_cache.store_tidal_track(
+            tidal_id=tidal_track.id,
+            name=tidal_track.name,
+            artists=artists,
+            album=tidal_track.album.name if tidal_track.album else None,
+            isrc=tidal_track.isrc,
+            duration=tidal_track.duration,
+            track_num=tidal_track.track_num,
+        )
+
     search_results = await search_new_tracks_on_spotify(
         spotify_session, tidal_tracks, "favorites", config
     )
 
     new_favorite_ids = []
+    not_found_tracks = []
     for idx, tidal_track in enumerate(tidal_tracks):
         spotify_id = search_results[idx]
         if spotify_id:
             report.matched_tracks += 1
+            unified_cache.store_match(
+                tidal_id=tidal_track.id,
+                spotify_id=spotify_id,
+                confidence=1.0,
+                method="search",
+            )
             if (
                 spotify_id not in spotify_favorite_ids
                 and spotify_id not in new_favorite_ids
@@ -1049,6 +1105,21 @@ async def sync_tidal_favorites_to_spotify(
                 new_favorite_ids.append(spotify_id)
         else:
             report.add_not_found(tidal_track)
+            not_found_tracks.append(tidal_track)
+
+    if not_found_tracks:
+        print(f"Caching {len(not_found_tracks)} not-found tracks...")
+        for tidal_track in not_found_tracks:
+            artists = [a.name for a in tidal_track.artists]
+            unified_cache.cache_not_found(
+                direction="tidal_to_spotify",
+                track_id=tidal_track.id,
+                track_name=tidal_track.name,
+                track_artists=artists,
+                isrc=tidal_track.isrc,
+            )
+        unified_cache.log_not_found_to_file("tidal_to_spotify")
+        print(f"Not-found tracks logged to songs_not_found_tidal_to_spotify.txt")
 
     if not new_favorite_ids:
         print("No new favorites to add")
