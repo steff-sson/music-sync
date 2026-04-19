@@ -10,25 +10,41 @@ Supports Spotify → Tidal and Tidal → Spotify sync.
 
 ## Build, Lint, and Test Commands
 
+### IMPORTANT: Python Environment Setup
+**NEVER use `pip install` with `--break-system-packages` or `--user` flags.**
+**NEVER install packages globally outside of a virtual environment.**
+This can break the system Python on Arch Linux and brick pacman.
+
+**Always use the project virtual environment:**
+```bash
+source .venv/bin/activate      # Activate venv (do this FIRST)
+pip install -e .                # Install package in editable mode
+pip install -e ".[dev]"         # Install with dev dependencies
+```
+
 ### Installation (Development)
 ```bash
-pip install -e .          # Install package in editable mode
-pip install -r requirements.txt  # Install dependencies
+# First time setup
+python -m venv .venv           # Create virtual environment
+source .venv/bin/activate      # Activate venv
+pip install -e .               # Install package in editable mode
+pip install -e ".[dev]"        # Install with dev dependencies (if defined)
 ```
 
 ### Running Tests
 ```bash
-pytest                        # Run all tests (maxfail=1, warnings disabled by default)
-pytest tests/                 # Run all tests in tests directory
-pytest tests/unit/            # Run unit tests only
-pytest tests/unit/test_auth.py              # Run single test file
-pytest tests/unit/test_auth.py::test_open_spotify_session  # Run specific test
-pytest -v                    # Run with verbose output
-pytest -k "test_name"        # Run tests matching pattern
+source .venv/bin/activate && pytest  # Run all tests (maxfail=1, warnings disabled by default)
+source .venv/bin/activate && pytest tests/                 # Run all tests in tests directory
+source .venv/bin/activate && pytest tests/unit/            # Run unit tests only
+source .venv/bin/activate && pytest tests/unit/test_auth.py              # Run single test file
+source .venv/bin/activate && pytest tests/unit/test_auth.py::test_open_spotify_session  # Run specific test
+source .venv/bin/activate && pytest -v                    # Run with verbose output
+source .venv/bin/activate && pytest -k "test_name"        # Run tests matching pattern
 ```
 
 ### Running the Application
 ```bash
+source .venv/bin/activate                              # Activate venv FIRST
 music-sync                              # Run with config.yml in working directory (Spotify → Tidal)
 python -m music_sync                   # Alternative invocation
 music-sync --config path/to/config.yml # Custom config location
