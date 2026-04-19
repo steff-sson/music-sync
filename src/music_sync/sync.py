@@ -207,14 +207,9 @@ async def repeat_on_request_error(function, *args, remaining=5, **kwargs):
             print(f"{str(e)} could not be recovered")
 
         retry_after = None
-        if (
-            isinstance(e, spotipy.exceptions.SpotifyException)
-            and e.response is not None
-        ):
+        if isinstance(e, spotipy.exceptions.SpotifyException):
             if e.http_status == 429:
-                retry_after = e.response.headers.get("Retry-After")
-                if retry_after:
-                    print(f"Spotify rate limit hit, Retry-After: {retry_after}s")
+                print(f"Spotify rate limit hit (429)")
         elif (
             isinstance(e, requests.exceptions.RequestException)
             and e.response is not None
@@ -807,7 +802,7 @@ async def search_new_tracks_on_spotify(
     dry_run: bool = False,
 ):
     async def _run_rate_limiter(semaphore):
-        rate = config.get("rate_limit", 8)
+        rate = config.get("rate_limit", 5)
         _sleep_time = rate / 4
         t0 = datetime.datetime.now()
         while True:
@@ -822,6 +817,9 @@ async def search_new_tracks_on_spotify(
                 except RuntimeError:
                     pass
 
+    semaphore = asyncio.Semaphore(config.get("max_concurrency", 5))
+    rate_limiter_task = asyncio.create_task(_run_rate_limiter(semaphore))
+
     tracks_to_search = [
         t for t in tidal_tracks if not reverse_failure_cache.has_match_failure(t.id)
     ]
@@ -829,8 +827,6 @@ async def search_new_tracks_on_spotify(
         skipped = len(tidal_tracks) - len(tracks_to_search)
         print(f"Skipping {skipped} previously failed tracks")
 
-    semaphore = asyncio.Semaphore(config.get("max_concurrency", 8))
-    rate_limiter_task = asyncio.create_task(_run_rate_limiter(semaphore))
     search_results = await atqdm.gather(
         *[
             repeat_on_request_error(spotify_search, t, semaphore, spotify_session)
