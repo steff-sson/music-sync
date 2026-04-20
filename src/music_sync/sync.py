@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import asyncio
+import logging
 from .cache import (
     failure_cache,
     track_match_cache,
@@ -13,6 +14,12 @@ from functools import partial
 from typing import Callable, List, Sequence, Set, Mapping
 import math
 import requests
+
+
+def log(*args, **kwargs):
+    msg = " ".join(str(a) for a in args)
+    print(msg, **kwargs)  # Note: Using print() here, not log() to avoid recursion
+    logging.info(msg)
 import sys
 import spotipy
 import tidalapi
@@ -207,14 +214,14 @@ async def repeat_on_request_error(function, *args, remaining=5, **kwargs):
         spotipy.exceptions.SpotifyException,
     ) as e:
         if remaining:
-            print(f"{str(e)} occurred, retrying {remaining} times")
+            log(f"{str(e)} occurred, retrying {remaining} times")
         else:
-            print(f"{str(e)} could not be recovered")
+            log(f"{str(e)} could not be recovered")
 
         retry_after = None
         if isinstance(e, spotipy.exceptions.SpotifyException):
             if e.http_status == 429:
-                print(f"Spotify rate limit hit (429)")
+                log(f"Spotify rate limit hit (429)")
                 if "rate_limit_state" in globals():
                     rate_limit_state["consecutive_429s"] += 1
                     backoff_seconds = min(
@@ -222,19 +229,19 @@ async def repeat_on_request_error(function, *args, remaining=5, **kwargs):
                     )
                     now = time.time()
                     rate_limit_state["cooldown_until"] = now + backoff_seconds
-                    print(f"Entering cooldown for {backoff_seconds}s")
+                    log(f"Entering cooldown for {backoff_seconds}s")
         elif (
             isinstance(e, requests.exceptions.RequestException)
             and e.response is not None
         ):
-            print(f"Response message: {e.response.text}")
-            print(f"Response headers: {e.response.headers}")
+            log(f"Response message: {e.response.text}")
+            log(f"Response headers: {e.response.headers}")
             retry_after = e.response.headers.get("Retry-After")
 
         if not remaining:
-            print("Aborting sync")
-            print(f"The following arguments were provided:\n\n {str(args)}")
-            print(traceback.format_exc())
+            log("Aborting sync")
+            log(f"The following arguments were provided:\n\n {str(args)}")
+            log(traceback.format_exc())
             sys.exit(1)
 
         if retry_after:
@@ -293,7 +300,7 @@ async def get_tracks_from_spotify_playlist(
             playlist_id=playlist_id, fields=fields, offset=offset
         )
 
-    print(f"Loading tracks from Spotify playlist '{spotify_playlist['name']}'")
+    log(f"Loading tracks from Spotify playlist '{spotify_playlist['name']}'")
     items = await repeat_on_request_error(
         _fetch_all_from_spotify_in_chunks,
         lambda offset: _get_tracks_from_spotify_playlist(
@@ -377,7 +384,7 @@ def get_tracks_for_new_tidal_playlist(
                 artist_names = ", ".join(
                     [artist["name"] for artist in spotify_track["artists"]]
                 )
-                print(
+                log(
                     f'Duplicate found: Track "{track_name}" by {artist_names} will be ignored'
                 )
             else:
@@ -442,7 +449,7 @@ async def search_new_tracks_on_tidal(
                 f"{spotify_track['id']}: {','.join([a['name'] for a in spotify_track['artists']])} - {spotify_track['name']}"
             )
             color = ("\033[91m", "\033[0m")
-            print(color[0] + "Could not find the track " + song404[-1] + color[1])
+            log(color[0] + "Could not find the track " + song404[-1] + color[1])
     file_name = "songs not found.txt"
     header = f"==========================\nPlaylist: {playlist_name}\n==========================\n"
     with open(file_name, "a", encoding="utf-8") as file:
@@ -468,7 +475,7 @@ async def sync_playlist(
     if tidal_playlist:
         old_tidal_tracks = await get_all_playlist_tracks(tidal_playlist)
     else:
-        print(
+        log(
             f"No playlist found on Tidal corresponding to Spotify playlist: '{spotify_playlist['name']}', creating new playlist"
         )
         tidal_playlist = tidal_session.user.create_playlist(
@@ -486,7 +493,7 @@ async def sync_playlist(
     # Update the Tidal playlist if there are changes
     old_tidal_track_ids = [t.id for t in old_tidal_tracks]
     if new_tidal_track_ids == old_tidal_track_ids:
-        print("No changes to write to Tidal playlist")
+        log("No changes to write to Tidal playlist")
     elif new_tidal_track_ids[: len(old_tidal_track_ids)] == old_tidal_track_ids:
         # Append new tracks to the existing playlist if possible
         add_multiple_tracks_to_playlist(
@@ -522,9 +529,9 @@ async def sync_favorites(
                 new_ids.append(match_id)
         return new_ids
 
-    print("Loading favorite tracks from Spotify")
+    log("Loading favorite tracks from Spotify")
     spotify_tracks = await get_tracks_from_spotify_favorites()
-    print("Loading existing favorite tracks from Tidal")
+    log("Loading existing favorite tracks from Tidal")
     old_tidal_tracks = await get_all_favorites(
         tidal_session.user.favorites, order="DATE"
     )
@@ -537,7 +544,7 @@ async def sync_favorites(
         ):
             tidal_session.user.favorites.add_track(tidal_id)
     else:
-        print("No new tracks to add to Tidal favorites")
+        log("No new tracks to add to Tidal favorites")
 
 
 def sync_playlists_wrapper(
@@ -599,7 +606,7 @@ def get_user_playlist_mappings(
 async def get_playlists_from_spotify(spotify_session: spotipy.Spotify, config):
     # get all the playlists from the Spotify account
     playlists = []
-    print("Loading Spotify playlists")
+    log("Loading Spotify playlists")
     first_results = spotify_session.current_user_playlists()
     exclude_list = set([x.split(":")[-1] for x in config.get("excluded_playlists", [])])
     playlists.extend([p for p in first_results["items"]])
@@ -642,12 +649,12 @@ def get_playlists_from_config(
         try:
             spotify_playlist = spotify_session.playlist(playlist_id=spotify_id)
         except spotipy.SpotifyException as e:
-            print(f"Error getting Spotify playlist {spotify_id}")
+            log(f"Error getting Spotify playlist {spotify_id}")
             raise e
         try:
             tidal_playlist = tidal_session.playlist(playlist_id=tidal_id)
         except Exception as e:
-            print(f"Error getting Tidal playlist {tidal_id}")
+            log(f"Error getting Tidal playlist {tidal_id}")
             raise e
         output.append((spotify_playlist, tidal_playlist))
     return output
@@ -843,7 +850,7 @@ async def search_new_tracks_on_spotify(
         rate_limit_state["consecutive_429s"] += 1
         backoff_seconds = min(30 * (2 ** rate_limit_state["consecutive_429s"]), 300)
         rate_limit_state["cooldown_until"] = now + backoff_seconds
-        print(
+        log(
             f"Rate limit hit! Entering cooldown for {backoff_seconds}s (consecutive: {rate_limit_state['consecutive_429s']})"
         )
 
@@ -858,7 +865,7 @@ async def search_new_tracks_on_spotify(
     ]
     if len(tracks_to_search) < len(tidal_tracks):
         skipped = len(tidal_tracks) - len(tracks_to_search)
-        print(f"Skipping {skipped} previously failed tracks")
+        log(f"Skipping {skipped} previously failed tracks")
 
     search_results = await atqdm.gather(
         *[
@@ -986,8 +993,16 @@ async def sync_tidal_playlist_to_spotify(
     report.total_tidal_tracks += len(tidal_tracks)
 
     playlist_name = tidal_playlist.name
+    log(f"→ Processing: {playlist_name} ({len(tidal_tracks)} tracks)")
     existing_spotify_playlist = spotify_playlists.get(playlist_name, [])
     existing_spotify_track_ids = {t["id"] for t in existing_spotify_playlist if t}
+    
+    existing_spotify_isrc_prefixes = set()
+    for sp_track in existing_spotify_playlist:
+        if sp_track and sp_track.get("external_ids", {}).get("isrc"):
+            isrc = sp_track["external_ids"]["isrc"]
+            if isrc and len(isrc) >= 11:
+                existing_spotify_isrc_prefixes.add(isrc[:11])
 
     for tidal_track in tidal_tracks:
         artists = [a.name for a in tidal_track.artists]
@@ -1017,7 +1032,16 @@ async def sync_tidal_playlist_to_spotify(
                 confidence=1.0,
                 method="search",
             )
-            if spotify_id not in existing_spotify_track_ids:
+            tidal_isrc_prefix = tidal_track.isrc[:11] if tidal_track.isrc and len(tidal_track.isrc) >= 11 else tidal_track.isrc
+            
+            is_already_in_playlist = (
+                spotify_id in existing_spotify_track_ids or
+                (tidal_isrc_prefix and tidal_isrc_prefix in existing_spotify_isrc_prefixes)
+            )
+            
+            if is_already_in_playlist:
+                log(f"  - {tidal_track.name}: already in playlist")
+            else:
                 new_spotify_ids.append(spotify_id)
         else:
             report.add_not_found(tidal_track)
@@ -1035,7 +1059,8 @@ async def sync_tidal_playlist_to_spotify(
             )
 
     if not new_spotify_ids and not dry_run:
-        print(f"No new tracks to add to playlist '{playlist_name}'")
+        log(f"No new tracks to add to playlist '{playlist_name}'")
+        log(f"✓ Done: {playlist_name}")
         return
 
     if existing_spotify_playlist:
@@ -1048,7 +1073,7 @@ async def sync_tidal_playlist_to_spotify(
                 }
             )
         else:
-            print(
+            log(
                 f"Adding {len(new_spotify_ids)} tracks to existing Spotify playlist '{playlist_name}'"
             )
             user_id = spotify_session.current_user()["id"]
@@ -1071,7 +1096,7 @@ async def sync_tidal_playlist_to_spotify(
                 }
             )
         else:
-            print(
+            log(
                 f"Creating new Spotify playlist '{playlist_name}' with {len(new_spotify_ids)} tracks"
             )
             new_playlist = spotify_session.user_playlist_create(
@@ -1081,6 +1106,8 @@ async def sync_tidal_playlist_to_spotify(
                 spotify_session.playlist_add_items(
                     new_playlist["id"], new_spotify_ids[i : i + 20]
                 )
+
+    log(f"✓ Done: {playlist_name}")
 
 
 async def sync_tidal_favorites_to_spotify(
@@ -1097,7 +1124,7 @@ async def sync_tidal_favorites_to_spotify(
 
     report.total_tidal_tracks += len(tidal_tracks)
 
-    print("Storing Tidal tracks in cache...")
+    log("Storing Tidal tracks in cache...")
     for tidal_track in tidal_tracks:
         artists = [a.name for a in tidal_track.artists]
         unified_cache.store_tidal_track(
@@ -1136,7 +1163,7 @@ async def sync_tidal_favorites_to_spotify(
             not_found_tracks.append(tidal_track)
 
     if not_found_tracks:
-        print(f"Caching {len(not_found_tracks)} not-found tracks...")
+        log(f"Caching {len(not_found_tracks)} not-found tracks...")
         for tidal_track in not_found_tracks:
             artists = [a.name for a in tidal_track.artists]
             unified_cache.cache_not_found(
@@ -1147,16 +1174,16 @@ async def sync_tidal_favorites_to_spotify(
                 isrc=tidal_track.isrc,
             )
         unified_cache.log_not_found_to_file("tidal_to_spotify")
-        print(f"Not-found tracks logged to songs_not_found_tidal_to_spotify.txt")
+        log(f"Not-found tracks logged to songs_not_found_tidal_to_spotify.txt")
 
     if not new_favorite_ids:
-        print("No new favorites to add")
+        log("No new favorites to add")
         return
 
     if dry_run:
         report.favorites_to_add = new_favorite_ids
     else:
-        print(f"Adding {len(new_favorite_ids)} tracks to Spotify favorites")
+        log(f"Adding {len(new_favorite_ids)} tracks to Spotify favorites")
         for spotify_id in tqdm(new_favorite_ids, desc="Adding to Spotify favorites"):
             spotify_session.current_user_saved_tracks_add([spotify_id])
 
@@ -1166,21 +1193,20 @@ async def sync_tidal_to_spotify(
     spotify_session: spotipy.Spotify,
     config: dict,
     dry_run: bool = False,
+    playlist_id: str | None = None,
 ):
     report = SyncReport()
 
-    print("Loading Tidal playlists...")
-    tidal_playlists = await get_all_playlists(tidal_session.user)
-    print(f"Found {len(tidal_playlists)} Tidal playlists")
-
-    print("Loading Spotify playlists and favorites...")
+    log("Loading Spotify playlists and favorites...")
     spotify_playlists = await get_all_spotify_playlists_tracks(spotify_session)
     spotify_favorite_ids = await get_spotify_favorite_track_ids(spotify_session)
-    print(
+    log(
         f"Found {len(spotify_playlists)} Spotify playlists, {len(spotify_favorite_ids)} favorites"
     )
 
-    for tidal_playlist in tqdm(tidal_playlists, desc="Syncing playlists"):
+    if playlist_id:
+        log(f"Loading single Tidal playlist {playlist_id}...")
+        tidal_playlist = tidal_session.playlist(playlist_id=playlist_id)
         await sync_tidal_playlist_to_spotify(
             tidal_playlist,
             spotify_session,
@@ -1190,13 +1216,28 @@ async def sync_tidal_to_spotify(
             report,
             dry_run,
         )
+    else:
+        log("Loading Tidal playlists...")
+        tidal_playlists = await get_all_playlists(tidal_session.user)
+        log(f"Found {len(tidal_playlists)} Tidal playlists")
 
-    print("\nSyncing favorites...")
-    await sync_tidal_favorites_to_spotify(
-        tidal_session, spotify_session, spotify_favorite_ids, config, report, dry_run
-    )
+        for tidal_playlist in tqdm(tidal_playlists, desc="Syncing playlists"):
+            await sync_tidal_playlist_to_spotify(
+                tidal_playlist,
+                spotify_session,
+                spotify_playlists,
+                spotify_favorite_ids,
+                config,
+                report,
+                dry_run,
+            )
 
-    print(report.summary())
+        log("\nSyncing favorites...")
+        await sync_tidal_favorites_to_spotify(
+            tidal_session, spotify_session, spotify_favorite_ids, config, report, dry_run
+        )
+
+    log(report.summary())
 
     if report.not_found_tracks:
         with open("songs_not_found_tidal_to_spotify.txt", "w", encoding="utf-8") as f:
@@ -1205,7 +1246,7 @@ async def sync_tidal_to_spotify(
                 f.write(
                     f"{track.id}: {artist_names} - {track.name} (ISRC: {track.isrc or 'N/A'})\n"
                 )
-        print(f"\nNot found tracks logged to songs_not_found_tidal_to_spotify.txt")
+        log(f"\nNot found tracks logged to songs_not_found_tidal_to_spotify.txt")
 
     return report
 
@@ -1215,7 +1256,8 @@ def sync_tidal_to_spotify_wrapper(
     spotify_session: spotipy.Spotify,
     config: dict,
     dry_run: bool = False,
+    playlist_id: str | None = None,
 ):
     return asyncio.run(
-        sync_tidal_to_spotify(tidal_session, spotify_session, config, dry_run)
+        sync_tidal_to_spotify(tidal_session, spotify_session, config, dry_run, playlist_id)
     )

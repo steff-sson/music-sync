@@ -36,31 +36,34 @@ pip install -e .
 
 ## Usage
 
-### Spotify → Tidal (default direction)
+### Sync Direction
 
-```bash
-music-sync                              # Sync all playlists
-music-sync --uri 1ABCDEqsABCD6EaABCDa0a  # Sync specific playlist
-music-sync --sync-favorites             # Sync liked songs
-```
+Specify direction as positional arguments: `INPUT OUTPUT`
 
 ### Tidal → Spotify
 
 ```bash
-music-sync --tidal-to-spotify            # Sync all Tidal playlists to Spotify
-music-sync --tidal-to-spotify --dry-run  # Preview what would be synced
+music-sync tidal spotify                    # Sync all Tidal playlists to Spotify
+music-sync tidal spotify --uri <playlist_id>  # Sync specific playlist
+music-sync tidal spotify --dry-run           # Preview what would be synced
+music-sync tidal spotify --sync-favorites   # Sync liked songs
+```
+
+### Spotify → Tidal
+
+```bash
+music-sync spotify tidal                    # Sync all Spotify playlists to Tidal
+music-sync spotify tidal --uri <playlist_uri> # Sync specific playlist
+music-sync spotify tidal --dry-run           # Preview what would be synced
 ```
 
 ### Dry Run
 
 Use `--dry-run` to preview changes before applying them. This shows:
 - Which tracks would be added to new/existing playlists
+- Which tracks already exist (by ISRC matching)
 - Which tracks couldn't be matched on the target platform
 - Summary report of all pending changes
-
-```bash
-music-sync --tidal-to-spotify --dry-run
-```
 
 ## Configuration
 

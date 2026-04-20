@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from typing import Sequence
 import tidalapi
@@ -8,6 +9,12 @@ import spotipy
 
 from .cache_db import UnifiedTrackCache, unified_cache
 from .matcher import matcher, BidirectionalMatcher
+
+
+def log(*args, **kwargs):
+    msg = " ".join(str(a) for a in args)
+    print(msg, **kwargs)  # Note: Using print() here, not log() to avoid recursion
+    logging.info(msg)
 
 
 @dataclass
@@ -194,14 +201,14 @@ class SyncEngine:
         """
         result = SyncResult(direction="tidal_to_spotify")
 
-        print("Loading Tidal tracks...")
+        log("Loading Tidal tracks...")
         tidal_tracks = await self.load_tidal_tracks(
             tidal_session, playlists, sync_favorites
         )
         result.total_source_tracks = len(tidal_tracks)
-        print(f"  Loaded {len(tidal_tracks)} Tidal tracks")
+        log(f"  Loaded {len(tidal_tracks)} Tidal tracks")
 
-        print("Finding Spotify matches for Tidal tracks...")
+        log("Finding Spotify matches for Tidal tracks...")
         matched = 0
         not_found = []
 
@@ -226,14 +233,14 @@ class SyncEngine:
         result.new_tracks = len([t for t in not_found if self._is_new_track(t)])
 
         if not dry_run:
-            print(f"Adding {len(not_found)} tracks to Spotify...")
+            log(f"Adding {len(not_found)} tracks to Spotify...")
             for tidal_track in not_found:
                 try:
                     self._add_tidal_track_to_spotify(tidal_track, spotify_session)
                 except Exception as e:
                     result.errors.append(f"{tidal_track.name}: {e}")
         else:
-            print(f"[DRY RUN] Would add {len(not_found)} tracks to Spotify")
+            log(f"[DRY RUN] Would add {len(not_found)} tracks to Spotify")
 
         if not_found:
             self._log_not_found("tidal_to_spotify", not_found)
@@ -253,12 +260,12 @@ class SyncEngine:
         """
         result = SyncResult(direction="spotify_to_tidal")
 
-        print("Loading Spotify tracks...")
+        log("Loading Spotify tracks...")
         spotify_tracks = await self.load_spotify_tracks(spotify_session, sync_favorites)
         result.total_source_tracks = len(spotify_tracks)
-        print(f"  Loaded {len(spotify_tracks)} Spotify tracks")
+        log(f"  Loaded {len(spotify_tracks)} Spotify tracks")
 
-        print("Finding Tidal matches for Spotify tracks...")
+        log("Finding Tidal matches for Spotify tracks...")
         matched = 0
         not_found = []
 
@@ -282,14 +289,14 @@ class SyncEngine:
         result.not_found_tracks = not_found
 
         if not dry_run:
-            print(f"Adding {len(not_found)} tracks to Tidal...")
+            log(f"Adding {len(not_found)} tracks to Tidal...")
             for spotify_track in not_found:
                 try:
                     self._add_spotify_track_to_tidal(spotify_track, tidal_session)
                 except Exception as e:
                     result.errors.append(f"{spotify_track['name']}: {e}")
         else:
-            print(f"[DRY RUN] Would add {len(not_found)} tracks to Tidal")
+            log(f"[DRY RUN] Would add {len(not_found)} tracks to Tidal")
 
         if not_found:
             self._log_not_found("spotify_to_tidal", not_found)

@@ -5,8 +5,8 @@ config.yaml
 .session.yml
 .tracks.db
 dry_run_output.log
-songs not found.txt
 songs_not_found*.txt
+music-sync.log
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

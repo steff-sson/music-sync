@@ -1,13 +1,39 @@
 import yaml
 import argparse
 import sys
+import logging
+from datetime import datetime
 
 from . import sync as _sync
 from . import auth as _auth
 from .sync_engine import sync_engine
 
 
+def setup_logging():
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    logger.handlers = []
+
+    file_handler = logging.FileHandler("music-sync.log", mode="a")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    )
+    logger.addHandler(file_handler)
+
+
+def log(*args, **kwargs):
+    msg = " ".join(str(a) for a in args)
+    print(msg, **kwargs)  # Note: Using print() here, not log() to avoid recursion
+    logging.info(msg)
+
+
 def main():
+    setup_logging()
+    logging.info("=" * 50)
+    logging.info(f"music-sync started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info("=" * 50)
+
     parser = argparse.ArgumentParser(
         description="music-sync - Bidirectional sync between Spotify and Tidal"
     )
@@ -71,23 +97,23 @@ def main():
         config = yaml.safe_load(f)
 
     if args.tidal_to_spotify:
-        print("Opening Tidal session")
+        log("Opening Tidal session")
         tidal_session = _auth.open_tidal_session()
         if not tidal_session.check_login():
             sys.exit("Could not connect to Tidal")
-        print("Opening Spotify session")
+        log("Opening Spotify session")
         spotify_session = _auth.open_spotify_session(config["spotify"])
 
-        print(
+        log(
             f"\n=== TIDAL TO SPOTIFY SYNC ({'DRY RUN' if args.dry_run else 'LIVE'}) ===\n"
         )
         _sync.sync_tidal_to_spotify_wrapper(
-            tidal_session, spotify_session, config, dry_run=args.dry_run
+            tidal_session, spotify_session, config, dry_run=args.dry_run, playlist_id=args.uri
         )
     else:
-        print("Opening Spotify session")
+        log("Opening Spotify session")
         spotify_session = _auth.open_spotify_session(config["spotify"])
-        print("Opening Tidal session")
+        log("Opening Tidal session")
         tidal_session = _auth.open_tidal_session()
         if not tidal_session.check_login():
             sys.exit("Could not connect to Tidal")
@@ -128,6 +154,10 @@ def main():
 
         if sync_favorites:
             _sync.sync_favorites_wrapper(spotify_session, tidal_session, config)
+
+    logging.info("=" * 50)
+    logging.info(f"music-sync finished at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info("=" * 50)
 
 
 if __name__ == "__main__":

@@ -189,6 +189,23 @@ class UnifiedTrackCache:
         """Store a Tidal <-> Spotify match"""
         with self.engine.connect() as conn:
             with conn.begin():
+                existing = conn.execute(
+                    select(self.tracks).where(self.tracks.c.spotify_id == spotify_id)
+                ).fetchone()
+
+                if existing and existing.tidal_id != tidal_id:
+                    conn.execute(
+                        update(self.tracks)
+                        .where(self.tracks.c.spotify_id == spotify_id)
+                        .values(
+                            spotify_id=None,
+                            match_confidence=None,
+                            match_method=None,
+                            matched_at=None,
+                            updated_at=datetime.datetime.now(),
+                        )
+                    )
+
                 conn.execute(
                     update(self.tracks)
                     .where(self.tracks.c.tidal_id == tidal_id)
