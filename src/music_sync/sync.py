@@ -911,7 +911,8 @@ async def get_all_spotify_playlists_tracks(
             if not chunk["next"]:
                 break
             offset += chunk["limit"]
-        result[playlist["name"]] = tracks
+        playlist_name_lower = playlist["name"].lower()
+        result[playlist_name_lower] = {"name": playlist["name"], "id": playlist["id"], "tracks": tracks}
     return result
 
 
@@ -994,7 +995,10 @@ async def sync_tidal_playlist_to_spotify(
 
     playlist_name = tidal_playlist.name
     log(f"→ Processing: {playlist_name} ({len(tidal_tracks)} tracks)")
-    existing_spotify_playlist = spotify_playlists.get(playlist_name, [])
+    playlist_name_lower = playlist_name.lower()
+    existing_spotify_playlist_data = spotify_playlists.get(playlist_name_lower, {})
+    existing_spotify_playlist = existing_spotify_playlist_data.get("tracks", [])
+    existing_spotify_playlist_id = existing_spotify_playlist_data.get("id")
     existing_spotify_track_ids = {t["id"] for t in existing_spotify_playlist if t}
     
     existing_spotify_isrc_prefixes = set()
@@ -1076,16 +1080,10 @@ async def sync_tidal_playlist_to_spotify(
             log(
                 f"Adding {len(new_spotify_ids)} tracks to existing Spotify playlist '{playlist_name}'"
             )
-            user_id = spotify_session.current_user()["id"]
-            spotify_playlist_id = None
-            for p in spotify_session.current_user_playlists()["items"]:
-                if p["name"] == playlist_name:
-                    spotify_playlist_id = p["id"]
-                    break
-            if spotify_playlist_id:
+            if existing_spotify_playlist_id:
                 for i in range(0, len(new_spotify_ids), 20):
                     spotify_session.playlist_add_items(
-                        spotify_playlist_id, new_spotify_ids[i : i + 20]
+                        existing_spotify_playlist_id, new_spotify_ids[i : i + 20]
                     )
     else:
         if dry_run:
@@ -1194,6 +1192,7 @@ async def sync_tidal_to_spotify(
     config: dict,
     dry_run: bool = False,
     playlist_id: str | None = None,
+    sync_favorites: bool = False,
 ):
     report = SyncReport()
 
@@ -1232,10 +1231,11 @@ async def sync_tidal_to_spotify(
                 dry_run,
             )
 
-        log("\nSyncing favorites...")
-        await sync_tidal_favorites_to_spotify(
-            tidal_session, spotify_session, spotify_favorite_ids, config, report, dry_run
-        )
+        if sync_favorites:
+            log("\nSyncing favorites...")
+            await sync_tidal_favorites_to_spotify(
+                tidal_session, spotify_session, spotify_favorite_ids, config, report, dry_run
+            )
 
     log(report.summary())
 
@@ -1257,7 +1257,8 @@ def sync_tidal_to_spotify_wrapper(
     config: dict,
     dry_run: bool = False,
     playlist_id: str | None = None,
+    sync_favorites: bool = False,
 ):
     return asyncio.run(
-        sync_tidal_to_spotify(tidal_session, spotify_session, config, dry_run, playlist_id)
+        sync_tidal_to_spotify(tidal_session, spotify_session, config, dry_run, playlist_id, sync_favorites)
     )

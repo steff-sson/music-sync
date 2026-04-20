@@ -108,7 +108,7 @@ def main():
             f"\n=== TIDAL TO SPOTIFY SYNC ({'DRY RUN' if args.dry_run else 'LIVE'}) ===\n"
         )
         _sync.sync_tidal_to_spotify_wrapper(
-            tidal_session, spotify_session, config, dry_run=args.dry_run, playlist_id=args.uri
+            tidal_session, spotify_session, config, dry_run=args.dry_run, playlist_id=args.uri, sync_favorites=args.sync_favorites
         )
     else:
         log("Opening Spotify session")
