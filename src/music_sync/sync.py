@@ -1442,6 +1442,40 @@ MUSICBRAINZ_GENRE_MAP = {
 }
 
 
+def load_genre_fallback_map():
+    """Load genre fallback CSV for OTHER artists"""
+    import csv
+    import os
+    
+    fallback_map = {}
+    csv_path = os.path.join(os.path.dirname(__file__), "..", "..", "genre_fallback.csv")
+    
+    try:
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                artist_name = row.get("artist_name", "").strip()
+                genre = row.get("genre", "").strip()
+                if artist_name and genre:
+                    fallback_map[artist_name] = genre
+    except FileNotFoundError:
+        pass
+    
+    return fallback_map
+
+
+_genre_fallback_cache = None
+
+def get_genre_fallback(artist_name: str) -> str | None:
+    """Get genre from fallback CSV for an artist"""
+    global _genre_fallback_cache
+    
+    if _genre_fallback_cache is None:
+        _genre_fallback_cache = load_genre_fallback_map()
+    
+    return _genre_fallback_cache.get(artist_name)
+
+
 def map_musicbrainz_genres_to_category(musicbrainz_genres: list) -> str:
     """Map MusicBrainz genres to our categories"""
     if not musicbrainz_genres:
@@ -1610,6 +1644,9 @@ async def clean_playlist(
     if other_artists:
         log("\n=== STAGE 2: MUSICBRAINZ LOOKUP ===")
         for artist_name in tqdm(other_artists, desc="MusicBrainz"):
+            if not artist_name or not artist_name.strip():
+                continue
+            
             artist_id = None
             for track_id, info in track_artist_info.items():
                 if info["artist_name"] == artist_name:
@@ -1637,6 +1674,10 @@ async def clean_playlist(
             artist_name = info["artist_name"]
             
             cached_genre = unified_cache.get_artist_genre(artist_id)
+            if not cached_genre or cached_genre == "OTHER":
+                fallback_genre = get_genre_fallback(artist_name)
+                if fallback_genre:
+                    cached_genre = fallback_genre
             genre = cached_genre if cached_genre else "OTHER"
             
             new_genre_tracks[genre].append(track_id)
