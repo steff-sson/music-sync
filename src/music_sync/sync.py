@@ -1476,6 +1476,34 @@ def get_genre_fallback(artist_name: str) -> str | None:
     return _genre_fallback_cache.get(artist_name)
 
 
+def save_other_artists_list(other_artists: list):
+    """Save OTHER artists to a list for later processing by LLM"""
+    import csv
+    import os
+    
+    csv_path = os.path.join(os.path.dirname(__file__), "..", "..", "other_artists_new.csv")
+    
+    existing = set()
+    if os.path.exists(csv_path):
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                existing.add(row.get("artist_name", "").strip())
+    
+    new_artists = [a for a in other_artists if a not in existing]
+    
+    if new_artists:
+        with open(csv_path, "a", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            if f.tell() == 0:
+                writer.writerow(["artist_name", "genre"])
+            for artist in new_artists:
+                writer.writerow([artist, ""])
+        
+        log(f"\nSaved {len(new_artists)} new OTHER artists to other_artists_new.csv")
+        log("Run 'other_artists_new.csv' through LLM to assign genres")
+
+
 def map_musicbrainz_genres_to_category(musicbrainz_genres: list) -> str:
     """Map MusicBrainz genres to our categories"""
     if not musicbrainz_genres:
@@ -1685,6 +1713,10 @@ async def clean_playlist(
         
         genre_tracks = new_genre_tracks
         genre_artists = new_genre_artists
+        
+        new_other_artists = list(new_genre_artists.get("OTHER", set()))
+        if new_other_artists:
+            save_other_artists_list(new_other_artists)
     
     log("\n=== FINAL GENRE DISTRIBUTION ===")
     for genre, tracks in sorted(genre_tracks.items(), key=lambda x: -len(x[1])):
