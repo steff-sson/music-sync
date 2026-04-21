@@ -3,6 +3,7 @@ config.yml
 config.yaml
 .cache*
 .session.yml
+.session.md
 .tracks.db
 dry_run_output.log
 songs_not_found*.txt
