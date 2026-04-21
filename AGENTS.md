@@ -54,6 +54,18 @@ music-sync --config path/to/config.yml # Custom config location
 music-sync --uri <playlist_uri>         # Sync specific playlist
 music-sync --sync-favorites            # Sync liked songs
 music-sync --tidal-to-spotify --dry-run # Legacy flag (still works)
+
+# Clean: Organize source into genre-based playlists
+music-sync tidal spotify --clean                    # Clean favorites (tidal→spotify)
+music-sync tidal spotify --clean --dry-run         # Preview without changes
+music-sync tidal spotify --clean --uri <playlist> # Clean specific playlist
+music-sync spotify tidal --clean                   # Clean via Tidal matching
+```
+
+### Dependencies
+```bash
+# Required for --clean (genre lookup via MusicBrainz)
+pip install musicbrainzngs
 ```
 
 ## Code Style Guidelines
@@ -153,11 +165,15 @@ src/music_sync/
 - `.cache.db` - Match failure cache (tracks that couldn't be matched)
 - These files are gitignored
 
-### Current Status (2026-04-19)
+### Current Status (2026-04-20)
 - Tidal → Spotify sync implemented
 - Spotify → Tidal sync implemented
 - UnifiedTrackCache with SQLite backend
 - BidirectionalMatcher for ISRC + fuzzy matching
 - Not-found tracking with user-readable log files
 - Rate limit protection with exponential backoff
-- **PAUSED:** Spotify rate limit hit (78449s). Will resume tomorrow.
+- **--clean-favorites:** Organizes Spotify favorites into genre-based playlists
+- **Genre Sources:** MusicBrainz (primary) + Name Matching + Artist Name Categories
+- **IMPORTANT:** Spotify artist() API is rate-limited (429, ~22h wait). Do NOT use.
+- **MusicBrainz:** Used for genre lookup (1 req/sec, reliable)
+- **Database:** artist_genres table stores genre_source ("musicbrainz", "name_match")

@@ -86,6 +86,19 @@ class UnifiedTrackCache:
             Column("searched_at", DateTime, default=datetime.datetime.now),
         )
 
+        self.artist_genres = Table(
+            "artist_genres",
+            meta,
+            Column("id", Integer, primary_key=True),
+            Column("artist_id", String, unique=True),
+            Column("artist_name", String),
+            Column("genre_category", String),
+            Column("genre_source", String, default="spotify"),  # spotify, musicbrainz, name_match
+            Column("spotify_genres", String),  # JSON string
+            Column("musicbrainz_genres", String),  # JSON string
+            Column("cached_at", DateTime, default=datetime.datetime.now),
+        )
+
         meta.create_all(self.engine)
 
     def store_tidal_track(
@@ -677,6 +690,86 @@ class UnifiedTrackCache:
     def _simple_artist(self, artist: str) -> str:
         """Simplify artist name for comparison"""
         return artist.lower().split("&")[0].strip().split(",")[0].strip()
+
+    def store_artist_genre(self, artist_id: str, artist_name: str, genre_category: str, spotify_genres: list, genre_source: str = "spotify", musicbrainz_genres: list = None):
+        """Store artist genre mapping"""
+        import json
+        try:
+            existing = self.get_artist_genre(artist_id)
+            if existing:
+                with self.engine.connect() as conn:
+                    with conn.begin():
+                        conn.execute(
+                            self.artist_genres.update()
+                            .where(self.artist_genres.c.artist_id == artist_id)
+                            .values(
+                                genre_category=genre_category,
+                                genre_source=genre_source,
+                                spotify_genres=json.dumps(spotify_genres),
+                                musicbrainz_genres=json.dumps(musicbrainz_genres) if musicbrainz_genres else None,
+                                cached_at=datetime.datetime.now(),
+                            )
+                        )
+            else:
+                with self.engine.connect() as conn:
+                    with conn.begin():
+                        conn.execute(
+                            self.artist_genres.insert().values(
+                                artist_id=artist_id,
+                                artist_name=artist_name,
+                                genre_category=genre_category,
+                                genre_source=genre_source,
+                                spotify_genres=json.dumps(spotify_genres),
+                                musicbrainz_genres=json.dumps(musicbrainz_genres) if musicbrainz_genres else None,
+                                cached_at=datetime.datetime.now(),
+                            )
+                        )
+        except Exception:
+            pass
+
+    def store_artist_genre_musicbrainz(self, artist_id: str, artist_name: str, genre_category: str, musicbrainz_genres: list):
+        """Store artist genre mapping from MusicBrainz"""
+        import json
+        try:
+            existing = self.get_artist_genre(artist_id)
+            if existing:
+                with self.engine.connect() as conn:
+                    with conn.begin():
+                        conn.execute(
+                            self.artist_genres.update()
+                            .where(self.artist_genres.c.artist_id == artist_id)
+                            .values(
+                                genre_category=genre_category,
+                                genre_source="musicbrainz",
+                                musicbrainz_genres=json.dumps(musicbrainz_genres),
+                                cached_at=datetime.datetime.now(),
+                            )
+                        )
+            else:
+                with self.engine.connect() as conn:
+                    with conn.begin():
+                        conn.execute(
+                            self.artist_genres.insert().values(
+                                artist_id=artist_id,
+                                artist_name=artist_name,
+                                genre_category=genre_category,
+                                genre_source="musicbrainz",
+                                musicbrainz_genres=json.dumps(musicbrainz_genres),
+                                cached_at=datetime.datetime.now(),
+                            )
+                        )
+        except Exception:
+            pass
+
+    def get_artist_genre(self, artist_id: str) -> str | None:
+        """Get cached artist genre"""
+        with self.engine.connect() as conn:
+            result = conn.execute(
+                select(self.artist_genres).where(self.artist_genres.c.artist_id == artist_id)
+            ).fetchone()
+            if result:
+                return result.genre_category
+            return None
 
 
 unified_cache = UnifiedTrackCache()
