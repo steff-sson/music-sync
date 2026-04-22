@@ -1637,6 +1637,66 @@ def lookup_artist_genre_musicbrainz(artist_name: str) -> tuple[str, list] | None
         return None
 
 
+def preload_spotify_data(spotify_session: spotipy.Spotify) -> dict:
+    """Pre-load all Spotify data: favorites + playlists + ISRCs"""
+    log("Loading all Spotify data...")
+    
+    # Load favorites
+    favorites_isrcs = set()
+    favorites = []
+    offset = 0
+    while True:
+        chunk = spotify_session.current_user_saved_tracks(offset=offset)
+        for item in chunk["items"]:
+            if item["track"]:
+                track = item["track"]
+                favorites.append(track)
+                isrc = track.get("external_ids", {}).get("isrc")
+                if isrc:
+                    favorites_isrcs.add(isrc)
+        if not chunk["next"]:
+            break
+        offset += chunk["limit"]
+    
+    # Load all playlists with their tracks
+    playlists_data = {}
+    user_playlists = spotify_session.current_user_playlists()
+    all_playlists_isrcs = set()
+    
+    for pl in user_playlists["items"]:
+        pl_id = pl["id"]
+        pl_name = pl["name"]
+        pl_tracks = []
+        
+        offset = 0
+        while True:
+            chunk = spotify_session.playlist_tracks(pl_id, offset=offset)
+            for item in chunk["items"]:
+                if item["track"]:
+                    track = item["track"]
+                    pl_tracks.append(track)
+                    isrc = track.get("external_ids", {}).get("isrc")
+                    if isrc:
+                        all_playlists_isrcs.add(isrc)
+            if not chunk["next"]:
+                break
+            offset += chunk["limit"]
+        
+        playlists_data[pl_name.lower()] = {
+            "id": pl_id,
+            "name": pl_name,
+            "tracks": pl_tracks,
+            "isrcs": {t.get("external_ids", {}).get("isrc") for t in pl_tracks if t.get("external_ids", {}).get("isrc")}
+        }
+    
+    return {
+        "favorites": favorites,
+        "favorites_isrcs": favorites_isrcs,
+        "playlists": playlists_data,
+        "all_isrcs": favorites_isrcs | all_playlists_isrcs
+    }
+
+
 async def clean_playlist(
     spotify_session: spotipy.Spotify,
     tidal_session,
@@ -1645,6 +1705,13 @@ async def clean_playlist(
     dry_run: bool = False,
 ):
     """Organize source into genre-based playlists and clean source"""
+    
+    # Pre-load all Spotify data (API calls once)
+    spotify_data = await asyncio.to_thread(preload_spotify_data, spotify_session)
+    all_existing_isrcs = spotify_data["all_isrcs"]
+    favorites_isrcs = spotify_data["favorites_isrcs"]
+    playlists_data = spotify_data["playlists"]
+    
     is_favorites = playlist_uri is None
     source_name = "favorites" if is_favorites else "playlist"
     
@@ -1784,50 +1851,60 @@ async def clean_playlist(
         for genre, track_ids in genre_tracks.items():
             playlist_name_clean = f"{playlist_name}-{genre}"
             
-            existing_playlist = None
-            user_playlists = spotify_session.current_user_playlists()
-            for p in user_playlists["items"]:
-                if p["name"] == playlist_name_clean:
-                    existing_playlist = p
-                    break
+            # Use pre-loaded playlists data (no API call)
+            existing_playlist_data = playlists_data.get(playlist_name_clean.lower())
             
-            if existing_playlist:
-                playlist_id = existing_playlist["id"]
-                log(f"Found existing playlist: {playlist_name_clean}")
+            if existing_playlist_data:
+                playlist_id = existing_playlist_data["id"]
+                existing_isrcs = existing_playlist_data["isrcs"]
+                log(f"Found existing playlist: {playlist_name_clean} ({len(existing_isrcs)} tracks)")
             else:
                 log(f"Creating playlist: {playlist_name_clean}")
                 new_playlist = spotify_session.user_playlist_create(
                     user_id, playlist_name_clean, description=f"Genre: {genre}"
                 )
                 playlist_id = new_playlist["id"]
-            
-            existing_isrcs = set()
-            offset = 0
-            while True:
-                chunk = spotify_session.playlist_tracks(playlist_id, offset=offset)
-                for item in chunk["items"]:
-                    if item["track"] and item["track"].get("external_ids", {}).get("isrc"):
-                        existing_isrcs.add(item["track"]["external_ids"]["isrc"])
-                if not chunk["next"]:
-                    break
-                offset += chunk["limit"]
+                existing_isrcs = set()
             
             new_track_ids = []
+            duplicate_exact = 0
+            duplicate_prefix = 0
+            
             for track_id in track_ids:
-                track_info = spotify_session.track(track_id)
+                # Get track from source_tracks (no API call)
+                track_info = next((t for t in source_tracks if t["id"] == track_id), None)
+                if not track_info:
+                    continue
+                    
                 isrc = track_info.get("external_ids", {}).get("isrc")
+                
+                # Duplicate detection
+                if isrc:
+                    # Check exact match
+                    if isrc in all_existing_isrcs:
+                        duplicate_exact += 1
+                        continue
+                    
+                    # Check prefix (remaster)
+                    if len(isrc) >= 11:
+                        prefix = isrc[:11]
+                        if any(prefix == existing_isrc[:11] for existing_isrc in all_existing_isrcs if existing_isrc and len(existing_isrc) >= 11):
+                            duplicate_prefix += 1
+                    
+                    all_existing_isrcs.add(isrc)
+                
                 if isrc and isrc not in existing_isrcs:
                     new_track_ids.append(track_id)
                     existing_isrcs.add(isrc)
             
             if new_track_ids:
-                log(f"Adding {len(new_track_ids)} tracks to {playlist_name_clean}")
+                log(f"Adding {len(new_track_ids)} tracks to {playlist_name_clean} (duplicates skipped: {duplicate_exact} exact, {duplicate_prefix} remaster)")
                 for i in range(0, len(new_track_ids), 20):
                     spotify_session.playlist_add_items(
                         playlist_id, new_track_ids[i:i + 20]
                     )
             else:
-                log(f"No new tracks for {playlist_name_clean}")
+                log(f"No new tracks for {playlist_name_clean} (duplicates: {duplicate_exact} exact, {duplicate_prefix} remaster)")
     else:
         log("\nMatching tracks to Tidal...")
         
