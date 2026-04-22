@@ -1691,14 +1691,24 @@ async def clean_playlist(
         track_artist_info[track_id] = {"artist_id": artist_id, "artist_name": artist_name}
         track_isrc[track_id] = isrc
         
+        # Check ARTIST_NAME_CATEGORIES FIRST before using cached genre
+        name_based_genre = map_spotify_genre_to_category([], artist_name)
+        
         cached_genre = unified_cache.get_artist_genre(artist_id)
-        if cached_genre:
+        
+        # Use name-based genre if found, otherwise use cache, otherwise OTHER
+        if name_based_genre and name_based_genre != "OTHER":
+            genre = name_based_genre
+        elif cached_genre:
             genre = cached_genre
         elif artist_id in processed_artists:
             genre = "OTHER"
         else:
-            genre = map_spotify_genre_to_category([], artist_name)
-            unified_cache.store_artist_genre(artist_id, artist_name, genre, [])
+            genre = "OTHER"
+        
+        # Update cache with new genre if different from cached
+        if name_based_genre and name_based_genre != "OTHER" and name_based_genre != cached_genre:
+            unified_cache.store_artist_genre(artist_id, artist_name, name_based_genre, [])
             processed_artists.add(artist_id)
         
         genre_tracks[genre].append(track_id)
