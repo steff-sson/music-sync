@@ -902,8 +902,16 @@ async def get_all_spotify_playlists_tracks(
     spotify_session: spotipy.Spotify,
 ) -> Mapping[str, List[dict]]:
     result = {}
-    playlists = spotify_session.current_user_playlists()
-    for playlist in playlists["items"]:
+    # Load ALL playlists (pagination fix)
+    first = spotify_session.current_user_playlists()
+    playlists = list(first["items"])
+    
+    # Load remaining pages
+    for offset in range(first["limit"], first["total"], first["limit"]):
+        chunk = spotify_session.current_user_playlists(offset=offset)
+        playlists.extend(chunk["items"])
+    
+    for playlist in playlists:
         tracks = []
         offset = 0
         while True:
@@ -912,7 +920,7 @@ async def get_all_spotify_playlists_tracks(
             if not chunk["next"]:
                 break
             offset += chunk["limit"]
-        playlist_name_lower = playlist["name"].lower()
+        playlist_name_lower = playlist["name"].strip().lower()
         result[playlist_name_lower] = {"name": playlist["name"], "id": playlist["id"], "tracks": tracks}
     return result
 
@@ -996,7 +1004,7 @@ async def sync_tidal_playlist_to_spotify(
 
     playlist_name = tidal_playlist.name
     log(f"→ Processing: {playlist_name} ({len(tidal_tracks)} tracks)")
-    playlist_name_lower = playlist_name.lower()
+    playlist_name_lower = playlist_name.strip().lower()
     existing_spotify_playlist_data = spotify_playlists.get(playlist_name_lower, {})
     existing_spotify_playlist = existing_spotify_playlist_data.get("tracks", [])
     existing_spotify_playlist_id = existing_spotify_playlist_data.get("id")
