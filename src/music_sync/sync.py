@@ -1345,7 +1345,7 @@ ARTIST_NAME_CATEGORIES = {
     "house": ["bedroom", "deeper", "deep", "house", "filey", "monophonic", "yotto", "eelke", "kling", "lulu"],
     "techno": ["techno", "tech house"],
     "edm": ["edm", "electro", "kygo", "martin garrix", "zeds dead", " excision"],
-    "electro": ["electronic", "synth", "modular", "bonobo", "four tet", "wolf alice"],
+    "electro": ["electronic", "synth", "modular", "four tet", "wolf alice"],
     "electro_chillout": ["bonobo", "tycho", "christian loffler", "mahmut orhan", "st germain", "bugge wessel", "dj koze", "sasha", "john digweed", "lane 8", "kiasmos", "moderat", "nicolas jaar", "parra for cuva", "lapalux", "rival consoles", "monolink", "blockhead", "thievery corporation", "nocando"],
     "dubstep": ["dubstep", "skrillex"],
     "drum and bass": ["drum", "dnb", "netsky"],
@@ -1360,8 +1360,8 @@ ARTIST_NAME_CATEGORIES = {
     "indie": ["indie", "the 1975", "arctic monkeys", "flume", "odesza", "bicep", "rÜfÜs du sol", "rufus du sol", "kakkmaddafakka", "half moon run", "glass animals", " foster the people", "m83"],
     "folk": ["ed sheeran", "passenger", "john mayer", "bob dylan", "joni", "james blake"],
     "singer-songwriter": ["singer", "songwriter"],
-    "electro": ["christian löffler", "mahmut orhan", "st Germain", "bugge wessel", "dj koze"],
-    "downtempo": ["tycho", "bonobo", "blocks", "ruis"],
+
+    "downtempo": ["blocks", "ruis"],
 }
 
 
