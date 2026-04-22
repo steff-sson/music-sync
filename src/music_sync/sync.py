@@ -1098,8 +1098,9 @@ async def sync_tidal_playlist_to_spotify(
             log(
                 f"Creating new Spotify playlist '{playlist_name}' with {len(new_spotify_ids)} tracks"
             )
+            user_id = spotify_session.current_user()["id"]
             new_playlist = spotify_session.user_playlist_create(
-                playlist_name, description=f"Imported from Tidal"
+                user_id, playlist_name, description=f"Imported from Tidal"
             )
             for i in range(0, len(new_spotify_ids), 20):
                 spotify_session.playlist_add_items(
