@@ -1029,6 +1029,18 @@ async def sync_tidal_playlist_to_spotify(
             track_num=tidal_track.track_num,
         )
 
+    # Stage 1+2: Check DB for duplicates BEFORE Spotify search (saves API calls)
+    precheck_results = {}
+    for tidal_track in tidal_tracks:
+        artists = [a.name for a in tidal_track.artists]
+        db_match = unified_cache.is_duplicate(
+            tidal_isrc=tidal_track.isrc,
+            tidal_name=tidal_track.name,
+            tidal_artists=artists,
+        )
+        if db_match:
+            precheck_results[tidal_track.id] = db_match["spotify_id"]
+
     search_results = await search_new_tracks_on_spotify(
         spotify_session, tidal_tracks, f"playlist '{playlist_name}'", config
     )
@@ -1036,7 +1048,12 @@ async def sync_tidal_playlist_to_spotify(
     new_spotify_ids = []
     not_found_tracks = []
     for idx, tidal_track in enumerate(tidal_tracks):
-        spotify_id = search_results[idx]
+        # Check if we already found a duplicate in DB (Stage 1+2)
+        db_spotify_id = precheck_results.get(tidal_track.id)
+        
+        # Use DB match if found, otherwise use search result
+        spotify_id = db_spotify_id if db_spotify_id else search_results[idx]
+        
         if spotify_id:
             report.matched_tracks += 1
             unified_cache.store_match(
@@ -1246,6 +1263,19 @@ async def sync_tidal_to_spotify(
             await sync_tidal_favorites_to_spotify(
                 tidal_session, spotify_session, spotify_favorite_ids, config, report, dry_run
             )
+
+    # Cleanup: Mark tracks as unmatched if they're no longer in Spotify
+    if not dry_run:
+        log("\nCleaning up deleted Spotify tracks...")
+        current_spotify_ids = set(spotify_favorite_ids)
+        for playlist_data in spotify_playlists.values():
+            for track in playlist_data.get("tracks", []):
+                if track and track.get("id"):
+                    current_spotify_ids.add(track["id"])
+        
+        cleaned = unified_cache.cleanup_deleted_spotify_tracks(current_spotify_ids)
+        if cleaned > 0:
+            log(f"Cleaned up {cleaned} deleted Spotify tracks from cache")
 
     log(report.summary())
 
