@@ -21,6 +21,8 @@ def log(*args, **kwargs):
     msg = " ".join(str(a) for a in args)
     print(msg, **kwargs)  # Note: Using print() here, not log() to avoid recursion
     logging.info(msg)
+
+
 import sys
 import spotipy
 import tidalapi
@@ -905,12 +907,12 @@ async def get_all_spotify_playlists_tracks(
     # Load ALL playlists (pagination fix)
     first = spotify_session.current_user_playlists()
     playlists = list(first["items"])
-    
+
     # Load remaining pages
     for offset in range(first["limit"], first["total"], first["limit"]):
         chunk = spotify_session.current_user_playlists(offset=offset)
         playlists.extend(chunk["items"])
-    
+
     for playlist in playlists:
         tracks = []
         offset = 0
@@ -921,7 +923,11 @@ async def get_all_spotify_playlists_tracks(
                 break
             offset += chunk["limit"]
         playlist_name_lower = playlist["name"].strip().lower()
-        result[playlist_name_lower] = {"name": playlist["name"], "id": playlist["id"], "tracks": tracks}
+        result[playlist_name_lower] = {
+            "name": playlist["name"],
+            "id": playlist["id"],
+            "tracks": tracks,
+        }
     return result
 
 
@@ -1009,7 +1015,7 @@ async def sync_tidal_playlist_to_spotify(
     existing_spotify_playlist = existing_spotify_playlist_data.get("tracks", [])
     existing_spotify_playlist_id = existing_spotify_playlist_data.get("id")
     existing_spotify_track_ids = {t["id"] for t in existing_spotify_playlist if t}
-    
+
     existing_spotify_isrc_prefixes = set()
     for sp_track in existing_spotify_playlist:
         if sp_track and sp_track.get("external_ids", {}).get("isrc"):
@@ -1050,10 +1056,10 @@ async def sync_tidal_playlist_to_spotify(
     for idx, tidal_track in enumerate(tidal_tracks):
         # Check if we already found a duplicate in DB (Stage 1+2)
         db_spotify_id = precheck_results.get(tidal_track.id)
-        
+
         # Use DB match if found, otherwise use search result
         spotify_id = db_spotify_id if db_spotify_id else search_results[idx]
-        
+
         if spotify_id:
             report.matched_tracks += 1
             unified_cache.store_match(
@@ -1062,13 +1068,17 @@ async def sync_tidal_playlist_to_spotify(
                 confidence=1.0,
                 method="search",
             )
-            tidal_isrc_prefix = tidal_track.isrc[:11] if tidal_track.isrc and len(tidal_track.isrc) >= 11 else tidal_track.isrc
-            
-            is_already_in_playlist = (
-                spotify_id in existing_spotify_track_ids or
-                (tidal_isrc_prefix and tidal_isrc_prefix in existing_spotify_isrc_prefixes)
+            tidal_isrc_prefix = (
+                tidal_track.isrc[:11]
+                if tidal_track.isrc and len(tidal_track.isrc) >= 11
+                else tidal_track.isrc
             )
-            
+
+            is_already_in_playlist = spotify_id in existing_spotify_track_ids or (
+                tidal_isrc_prefix
+                and tidal_isrc_prefix in existing_spotify_isrc_prefixes
+            )
+
             if is_already_in_playlist:
                 log(f"  - {tidal_track.name}: already in playlist")
             else:
@@ -1261,7 +1271,12 @@ async def sync_tidal_to_spotify(
         if sync_favorites:
             log("\nSyncing favorites...")
             await sync_tidal_favorites_to_spotify(
-                tidal_session, spotify_session, spotify_favorite_ids, config, report, dry_run
+                tidal_session,
+                spotify_session,
+                spotify_favorite_ids,
+                config,
+                report,
+                dry_run,
             )
 
     # Cleanup: Mark tracks as unmatched if they're no longer in Spotify
@@ -1272,7 +1287,7 @@ async def sync_tidal_to_spotify(
             for track in playlist_data.get("tracks", []):
                 if track and track.get("id"):
                     current_spotify_ids.add(track["id"])
-        
+
         cleaned = unified_cache.cleanup_deleted_spotify_tracks(current_spotify_ids)
         if cleaned > 0:
             log(f"Cleaned up {cleaned} deleted Spotify tracks from cache")
@@ -1300,7 +1315,9 @@ def sync_tidal_to_spotify_wrapper(
     sync_favorites: bool = False,
 ):
     return asyncio.run(
-        sync_tidal_to_spotify(tidal_session, spotify_session, config, dry_run, playlist_id, sync_favorites)
+        sync_tidal_to_spotify(
+            tidal_session, spotify_session, config, dry_run, playlist_id, sync_favorites
+        )
     )
 
 
@@ -1308,10 +1325,16 @@ def sync_tidal_to_spotify_wrapper(
 GENRE_CATEGORIES = {
     "house": ["house", "deep house", "progressive house"],
     "techno": ["techno", "tech house", "minimal techno"],
-    "edm": ["edm", "electro house", "big room", "future bass", "happy hardcore", "nightcore"],
+    "edm": [
+        "edm",
+        "electro house",
+        "big room",
+        "future bass",
+        "happy hardcore",
+        "nightcore",
+    ],
     "synthwave": ["synthwave", "retrowave", "outrun"],
     "electro": ["electro", "electronic", "idm", "glitch"],
-    "electro_chillout": ["electro chill", "electro chillout", "electronic chillout", "electronic chill", "ambient electronic", "chill electronic", "synthwave", "retrowave"],
     "trance": ["trance", "psytrance", "goa"],
     "dubstep": ["dubstep", "uk dubstep"],
     "drum and bass": ["drum and bass", "drum & bass", "dnb", "jungle"],
@@ -1325,15 +1348,32 @@ GENRE_CATEGORIES = {
     "rap": ["rap", "freestyle"],
     "trap": ["trap", "trap music"],
     "classical": ["classical", "classical crossover"],
-    "soundtrack": ["soundtrack", "score", "film score", "movie soundtrack", "cinematic", "orchestral"],
+    "soundtrack": [
+        "soundtrack",
+        "score",
+        "film score",
+        "movie soundtrack",
+        "cinematic",
+        "orchestral",
+    ],
     "jazz": ["jazz", "bebop", "smooth jazz", "bossa nova", "big band"],
     "soul": ["soul", "neo-soul"],
     "r&b": ["r&b", "contemporary r&b"],
     "indie": ["indie", "indie rock", "indie pop"],
     "alternative": ["alternative", "alternative rock"],
-    "chillout": ["chillout", "chill"],
     "downtempo": ["downtempo", "trip hop", "lo-fi beats", "slowcore"],
-    "ambient": ["ambient", "ambient music"],
+    "ambient": [
+        "ambient",
+        "ambient music",
+        "chillout",
+        "chill",
+        "electro chill",
+        "electro chillout",
+        "electronic chillout",
+        "electronic chill",
+        "ambient electronic",
+        "chill electronic",
+    ],
     "lounge": ["lounge", "lounge music"],
     "country": ["country", "country pop"],
     "folk": ["folk", "folk rock", "singer-songwriter", "celtic"],
@@ -1342,25 +1382,122 @@ GENRE_CATEGORIES = {
 }
 
 ARTIST_NAME_CATEGORIES = {
-    "house": ["bedroom", "deeper", "deep", "house", "filey", "monophonic", "yotto", "eelke", "kling", "lulu"],
+    "house": [
+        "bedroom",
+        "deeper",
+        "deep",
+        "house",
+        "filey",
+        "monophonic",
+        "yotto",
+        "eelke",
+        "kling",
+        "lulu",
+    ],
     "techno": ["techno", "tech house"],
     "edm": ["edm", "electro", "kygo", "martin garrix", "zeds dead", " excision"],
     "electro": ["electronic", "synth", "modular", "four tet", "wolf alice"],
-    "electro_chillout": ["bonobo", "tycho", "christian loffler", "mahmut orhan", "st germain", "bugge wessel", "dj koze", "sasha", "john digweed", "lane 8", "kiasmos", "moderat", "nicolas jaar", "parra for cuva", "lapalux", "rival consoles", "monolink", "blockhead", "thievery corporation", "nocando"],
+    "ambient": [
+        "bonobo",
+        "tycho",
+        "christian loffler",
+        "mahmut orhan",
+        "st germain",
+        "bugge wessel",
+        "dj koze",
+        "sasha",
+        "john digweed",
+        "lane 8",
+        "kiasmos",
+        "moderat",
+        "nicolas jaar",
+        "parra for cuva",
+        "lapalux",
+        "rival consoles",
+        "monolink",
+        "blockhead",
+        "thievery corporation",
+        "nocando",
+    ],
     "dubstep": ["dubstep", "skrillex"],
     "drum and bass": ["drum", "dnb", "netsky"],
-    "rock": ["coldplay", "the fray", "snow patrol", "ash", "radiohead", "u2", "queen", "foo fighters", "nin", "tool", "deftones", "museum", "the national", "mumford", "imagine dragons"],
+    "rock": [
+        "coldplay",
+        "the fray",
+        "snow patrol",
+        "ash",
+        "radiohead",
+        "u2",
+        "queen",
+        "foo fighters",
+        "nin",
+        "tool",
+        "deftones",
+        "museum",
+        "the national",
+        "mumford",
+        "imagine dragons",
+    ],
     "metal": ["metal", "metallic", "slipknot", "mastodon", "linkin park"],
-    "pop": ["taylor swift", "ed sheeran", "billie eilish", "dua lipa", "harry styles", "bruno mars", "justin bieber", "ariana grande", "weekend", "niall horan", "dean lewis", "james bay", "katy perry", "rihanna", "sam smith", "sia", "adele"],
+    "pop": [
+        "taylor swift",
+        "ed sheeran",
+        "billie eilish",
+        "dua lipa",
+        "harry styles",
+        "bruno mars",
+        "justin bieber",
+        "ariana grande",
+        "weekend",
+        "niall horan",
+        "dean lewis",
+        "james bay",
+        "katy perry",
+        "rihanna",
+        "sam smith",
+        "sia",
+        "adele",
+    ],
     "hip-hop": ["eminem", "kendrick", "drake", "jay-z", "kanye", "kendrick lamar"],
     "rap": ["rap"],
     "classical": ["classical", "bach", "mozart", "beethoven", "vivaldi", "chopin"],
-    "soundtrack": ["hans zimmer", "john williams", "ost", "soundtrack", "ramin djawadi", "michael giacchino", "howard shore", "thomas newman", "james newton howard", "danny elfman"],
+    "soundtrack": [
+        "hans zimmer",
+        "john williams",
+        "ost",
+        "soundtrack",
+        "ramin djawadi",
+        "michael giacchino",
+        "howard shore",
+        "thomas newman",
+        "james newton howard",
+        "danny elfman",
+    ],
     "jazz": ["jazz", "miles davis", "coltrane", "norah jones", "laptop", "floyd"],
-    "indie": ["indie", "the 1975", "arctic monkeys", "flume", "odesza", "bicep", "rÜfÜs du sol", "rufus du sol", "kakkmaddafakka", "half moon run", "glass animals", " foster the people", "m83"],
-    "folk": ["ed sheeran", "passenger", "john mayer", "bob dylan", "joni", "james blake"],
+    "indie": [
+        "indie",
+        "the 1975",
+        "arctic monkeys",
+        "flume",
+        "odesza",
+        "bicep",
+        "rÜfÜs du sol",
+        "rufus du sol",
+        "kakkmaddafakka",
+        "half moon run",
+        "glass animals",
+        " foster the people",
+        "m83",
+    ],
+    "folk": [
+        "ed sheeran",
+        "passenger",
+        "john mayer",
+        "bob dylan",
+        "joni",
+        "james blake",
+    ],
     "singer-songwriter": ["singer", "songwriter"],
-
     "downtempo": ["blocks", "ruis"],
 }
 
@@ -1375,14 +1512,14 @@ def map_spotify_genre_to_category(spotify_genres: list, artist_name: str = "") -
             for kw in keywords:
                 if kw in spotify_genre_lower or spotify_genre_lower in kw:
                     return category.upper()
-    
+
     if artist_name:
         artist_lower = artist_name.lower()
         for category, name_keywords in ARTIST_NAME_CATEGORIES.items():
             for kw in name_keywords:
                 if kw in artist_lower:
                     return category.upper()
-    
+
     return "OTHER"
 
 
@@ -1390,48 +1527,48 @@ def map_audio_features_to_category(audio_features: dict) -> str:
     """Map Spotify audio features to genre category"""
     if not audio_features:
         return "OTHER"
-    
+
     tempo = audio_features.get("tempo", 0)
     energy = audio_features.get("energy", 0)
     danceability = audio_features.get("danceability", 0)
     valence = audio_features.get("valence", 0)
     acousticness = audio_features.get("acousticness", 0)
     instrumentalness = audio_features.get("instrumentalness", 0)
-    
+
     if instrumentalness > 0.5:
         if tempo < 100:
             return "AMBIENT"
         return "SOUNDTRACK"
-    
+
     if tempo > 170 and energy > 0.7:
         return "DRUM AND BASS"
-    
+
     if tempo > 120 and energy > 0.7:
         if danceability > 0.7:
             return "EDM"
         return "ROCK"
-    
+
     if 110 <= tempo <= 130 and energy > 0.6:
         if danceability > 0.6:
             return "HOUSE"
         if instrumentalness > 0.1:
             return "SOUNDTRACK"
-    
+
     if tempo > 140 and energy > 0.5:
         return "TECHNO"
-    
+
     if energy < 0.4 and acousticness > 0.5:
         return "FOLK"
-    
+
     if energy < 0.4 and (valence > 0.5 or danceability < 0.4):
         return "POP"
-    
+
     if energy < 0.5 and instrumentalness < 0.3:
         return "INDIE"
-    
+
     if danceability > 0.7 and energy > 0.5:
         return "DANCE"
-    
+
     return "OTHER"
 
 
@@ -1469,7 +1606,7 @@ MUSICBRAINZ_GENRE_MAP = {
     "drum and bass": "drum and bass",
     "lo-fi": "downtempo",
     "lofi": "downtempo",
-    "chill": "chillout",
+    "chill": "ambient",
     "experimental": "electro",
     "noise": "electro",
     "sound art": "soundtrack",
@@ -1487,10 +1624,10 @@ def load_genre_fallback_map():
     """Load genre fallback CSV for OTHER artists"""
     import csv
     import os
-    
+
     fallback_map = {}
     csv_path = os.path.join(os.path.dirname(__file__), "..", "..", "genre_fallback.csv")
-    
+
     try:
         with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -1501,19 +1638,20 @@ def load_genre_fallback_map():
                     fallback_map[artist_name] = genre
     except FileNotFoundError:
         pass
-    
+
     return fallback_map
 
 
 _genre_fallback_cache = None
 
+
 def get_genre_fallback(artist_name: str) -> str | None:
     """Get genre from fallback CSV for an artist"""
     global _genre_fallback_cache
-    
+
     if _genre_fallback_cache is None:
         _genre_fallback_cache = load_genre_fallback_map()
-    
+
     return _genre_fallback_cache.get(artist_name)
 
 
@@ -1521,18 +1659,20 @@ def save_other_artists_list(other_artists: list):
     """Save OTHER artists to a list for later processing by LLM"""
     import csv
     import os
-    
-    csv_path = os.path.join(os.path.dirname(__file__), "..", "..", "other_artists_new.csv")
-    
+
+    csv_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "other_artists_new.csv"
+    )
+
     existing = set()
     if os.path.exists(csv_path):
         with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 existing.add(row.get("artist_name", "").strip())
-    
+
     new_artists = [a for a in other_artists if a not in existing]
-    
+
     if new_artists:
         with open(csv_path, "a", encoding="utf-8", newline="") as f:
             writer = csv.writer(f)
@@ -1540,7 +1680,7 @@ def save_other_artists_list(other_artists: list):
                 writer.writerow(["artist_name", "genre"])
             for artist in new_artists:
                 writer.writerow([artist, ""])
-        
+
         log(f"\nSaved {len(new_artists)} new OTHER artists to other_artists_new.csv")
         log("Run 'other_artists_new.csv' through LLM to assign genres")
 
@@ -1549,16 +1689,27 @@ def map_musicbrainz_genres_to_category(musicbrainz_genres: list) -> str:
     """Map MusicBrainz genres to our categories"""
     if not musicbrainz_genres:
         return "OTHER"
-    
-    top_genre = musicbrainz_genres[0].get("name", "").lower() if musicbrainz_genres else ""
+
+    top_genre = (
+        musicbrainz_genres[0].get("name", "").lower() if musicbrainz_genres else ""
+    )
     if not top_genre:
         return "OTHER"
-    
+
     if top_genre in MUSICBRAINZ_GENRE_MAP:
         return MUSICBRAINZ_GENRE_MAP[top_genre].upper()
-    
+
     for category, mb_genres in {
-        "rock": ["rock", "alternative rock", "hard rock", "classic rock", "indie rock", "punk", "metal", "grunge"],
+        "rock": [
+            "rock",
+            "alternative rock",
+            "hard rock",
+            "classic rock",
+            "indie rock",
+            "punk",
+            "metal",
+            "grunge",
+        ],
         "pop": ["pop", "dance pop", "synth pop", "electropop"],
         "electro": ["electronic", "experimental", "idm", "glitch", "synth"],
         "house": ["house", "deep house", "progressive house", "tech house"],
@@ -1567,14 +1718,21 @@ def map_musicbrainz_genres_to_category(musicbrainz_genres: list) -> str:
         "dance": ["dance", "disco", "funk"],
         "classical": ["classical", "contemporary classical", "baroque", "piano"],
         "soundtrack": ["soundtrack", "score", "film score", "video game music"],
-        "ambient": ["ambient", "drone", "new age"],
+        "ambient": [
+            "ambient",
+            "drone",
+            "new age",
+            "chillout",
+            "electronic chillout",
+            "ambient electronic",
+        ],
         "jazz": ["jazz", "smooth jazz", "bebop", "swing"],
         "folk": ["folk", "singer-songwriter", "acoustic", "americana"],
         "hip-hop": ["hip-hop", "hip hop", "rap"],
     }.items():
         if any(g in top_genre for g in mb_genres):
             return category.upper()
-    
+
     return "OTHER"
 
 
@@ -1586,7 +1744,10 @@ def get_musicbrainz_client():
     global _musicbrainz_session
     if _musicbrainz_session is None:
         import musicbrainzngs
-        musicbrainzngs.set_useragent("music-sync", "1.0", "https://github.com/stefan-weitzel/music-sync")
+
+        musicbrainzngs.set_useragent(
+            "music-sync", "1.0", "https://github.com/stefan-weitzel/music-sync"
+        )
         _musicbrainz_session = musicbrainzngs
     return _musicbrainz_session
 
@@ -1594,44 +1755,44 @@ def get_musicbrainz_client():
 def lookup_artist_genre_musicbrainz(artist_name: str) -> tuple[str, list] | None:
     """Look up artist genre from MusicBrainz. Returns (category, mb_genres) or None"""
     import time
-    
+
     mb = get_musicbrainz_client()
-    
+
     try:
         result = mb.search_artists(artist=artist_name, limit=1)
         artists = result.get("artist-list", [])
-        
+
         if not artists:
             return None
-        
+
         artist = artists[0]
         mbid = artist.get("id")
-        
+
         if not mbid:
             return None
-        
+
         time.sleep(1.1)
-        
+
         try:
             artist_data = mb.get_artist_by_id(mbid, includes=["tags"])
             mb_genres = artist_data.get("artist", {}).get("tag-list", [])
-            
+
             genre_names = []
             for g in mb_genres:
                 name = g.get("name", "")
                 count = g.get("count", 1)
                 genre_names.append({"name": name, "count": count})
-            
+
             if not genre_names:
                 return None
-            
+
             category = map_musicbrainz_genres_to_category(genre_names)
-            
+
             return (category, genre_names)
         except Exception as e:
             log(f"MusicBrainz lookup error for {artist_name}: {e}")
             return None
-            
+
     except Exception as e:
         log(f"MusicBrainz search error for {artist_name}: {e}")
         return None
@@ -1640,7 +1801,7 @@ def lookup_artist_genre_musicbrainz(artist_name: str) -> tuple[str, list] | None
 def preload_spotify_data(spotify_session: spotipy.Spotify) -> dict:
     """Pre-load all Spotify data: favorites + playlists + ISRCs"""
     log("Loading all Spotify data...")
-    
+
     # Load favorites
     favorites_isrcs = set()
     favorites = []
@@ -1657,17 +1818,17 @@ def preload_spotify_data(spotify_session: spotipy.Spotify) -> dict:
         if not chunk["next"]:
             break
         offset += chunk["limit"]
-    
+
     # Load all playlists with their tracks
     playlists_data = {}
     user_playlists = spotify_session.current_user_playlists()
     all_playlists_isrcs = set()
-    
+
     for pl in user_playlists["items"]:
         pl_id = pl["id"]
         pl_name = pl["name"]
         pl_tracks = []
-        
+
         offset = 0
         while True:
             chunk = spotify_session.playlist_tracks(pl_id, offset=offset)
@@ -1681,19 +1842,23 @@ def preload_spotify_data(spotify_session: spotipy.Spotify) -> dict:
             if not chunk["next"]:
                 break
             offset += chunk["limit"]
-        
+
         playlists_data[pl_name.lower()] = {
             "id": pl_id,
             "name": pl_name,
             "tracks": pl_tracks,
-            "isrcs": {t.get("external_ids", {}).get("isrc") for t in pl_tracks if t.get("external_ids", {}).get("isrc")}
+            "isrcs": {
+                t.get("external_ids", {}).get("isrc")
+                for t in pl_tracks
+                if t.get("external_ids", {}).get("isrc")
+            },
         }
-    
+
     return {
         "favorites": favorites,
         "favorites_isrcs": favorites_isrcs,
         "playlists": playlists_data,
-        "all_isrcs": favorites_isrcs | all_playlists_isrcs
+        "all_isrcs": favorites_isrcs | all_playlists_isrcs,
     }
 
 
@@ -1705,25 +1870,27 @@ async def clean_playlist(
     dry_run: bool = False,
 ):
     """Organize source into genre-based playlists and clean source"""
-    
+
     # Pre-load all Spotify data (API calls once)
     spotify_data = await asyncio.to_thread(preload_spotify_data, spotify_session)
     all_existing_isrcs = spotify_data["all_isrcs"]
     favorites_isrcs = spotify_data["favorites_isrcs"]
     playlists_data = spotify_data["playlists"]
-    
+
     is_favorites = playlist_uri is None
     source_name = "favorites" if is_favorites else "playlist"
-    
+
     log(f"Loading Spotify source: {source_name}...")
     source_tracks = []
     playlist_name = "favorites"
-    
+
     if is_favorites:
         offset = 0
         while True:
             chunk = spotify_session.current_user_saved_tracks(offset=offset)
-            source_tracks.extend([item["track"] for item in chunk["items"] if item["track"]])
+            source_tracks.extend(
+                [item["track"] for item in chunk["items"] if item["track"]]
+            )
             if not chunk["next"]:
                 break
             offset += chunk["limit"]
@@ -1734,35 +1901,40 @@ async def clean_playlist(
         offset = 0
         while True:
             chunk = spotify_session.playlist_tracks(playlist_id, offset=offset)
-            source_tracks.extend([item["track"] for item in chunk["items"] if item["track"]])
+            source_tracks.extend(
+                [item["track"] for item in chunk["items"] if item["track"]]
+            )
             if not chunk["next"]:
                 break
             offset += chunk["limit"]
-    
+
     log(f"Found {len(source_tracks)} tracks in {source_name}")
-    
+
     genre_tracks = defaultdict(list)
     genre_artists = defaultdict(set)
     track_artist_info = {}
     track_isrc = {}
-    
+
     log("Categorizing tracks by genre...")
     processed_artists = set()
-    
+
     for track in tqdm(source_tracks, desc="Categorizing"):
         artist_id = track["artists"][0]["id"]
         artist_name = track["artists"][0]["name"]
         track_id = track["id"]
         isrc = track.get("external_ids", {}).get("isrc", "")
-        
-        track_artist_info[track_id] = {"artist_id": artist_id, "artist_name": artist_name}
+
+        track_artist_info[track_id] = {
+            "artist_id": artist_id,
+            "artist_name": artist_name,
+        }
         track_isrc[track_id] = isrc
-        
+
         # Check ARTIST_NAME_CATEGORIES FIRST before using cached genre
         name_based_genre = map_spotify_genre_to_category([], artist_name)
-        
+
         cached_genre = unified_cache.get_artist_genre(artist_id)
-        
+
         # Use name-based genre if found, otherwise use cache, otherwise OTHER
         if name_based_genre and name_based_genre != "OTHER":
             genre = name_based_genre
@@ -1772,33 +1944,39 @@ async def clean_playlist(
             genre = "OTHER"
         else:
             genre = "OTHER"
-        
+
         # Update cache with new genre if different from cached
-        if name_based_genre and name_based_genre != "OTHER" and name_based_genre != cached_genre:
-            unified_cache.store_artist_genre(artist_id, artist_name, name_based_genre, [])
+        if (
+            name_based_genre
+            and name_based_genre != "OTHER"
+            and name_based_genre != cached_genre
+        ):
+            unified_cache.store_artist_genre(
+                artist_id, artist_name, name_based_genre, []
+            )
             processed_artists.add(artist_id)
-        
+
         genre_tracks[genre].append(track_id)
         genre_artists[genre].add(artist_name)
-    
+
     other_artists = list(genre_artists.get("OTHER", set()))
     log("\n=== STAGE 1: NAME-BASED GENRE DISTRIBUTION ===")
     for genre, tracks in sorted(genre_tracks.items(), key=lambda x: -len(x[1])):
         log(f"  {genre}: {len(tracks)} tracks")
     log(f"\nOther artists to lookup in MusicBrainz: {len(other_artists)}")
-    
+
     if other_artists:
         log("\n=== STAGE 2: MUSICBRAINZ LOOKUP ===")
         for artist_name in tqdm(other_artists, desc="MusicBrainz"):
             if not artist_name or not artist_name.strip():
                 continue
-            
+
             artist_id = None
             for track_id, info in track_artist_info.items():
                 if info["artist_name"] == artist_name:
                     artist_id = info["artist_id"]
                     break
-            
+
             if artist_id:
                 result = lookup_artist_genre_musicbrainz(artist_name)
                 if result:
@@ -1810,54 +1988,56 @@ async def clean_playlist(
                     unified_cache.store_artist_genre_musicbrainz(
                         artist_id, artist_name, "OTHER", []
                     )
-        
+
         log("\n=== STAGE 3: RECATEGORIZING WITH MUSICBRAINZ DATA ===")
         new_genre_tracks = defaultdict(list)
         new_genre_artists = defaultdict(set)
-        
+
         for track_id, info in track_artist_info.items():
             artist_id = info["artist_id"]
             artist_name = info["artist_name"]
-            
+
             cached_genre = unified_cache.get_artist_genre(artist_id)
             if not cached_genre or cached_genre == "OTHER":
                 fallback_genre = get_genre_fallback(artist_name)
                 if fallback_genre:
                     cached_genre = fallback_genre
             genre = cached_genre if cached_genre else "OTHER"
-            
+
             new_genre_tracks[genre].append(track_id)
             new_genre_artists[genre].add(artist_name)
-        
+
         genre_tracks = new_genre_tracks
         genre_artists = new_genre_artists
-        
+
         new_other_artists = list(new_genre_artists.get("OTHER", set()))
         if new_other_artists:
             save_other_artists_list(new_other_artists)
-    
+
     log("\n=== FINAL GENRE DISTRIBUTION ===")
     for genre, tracks in sorted(genre_tracks.items(), key=lambda x: -len(x[1])):
         log(f"  {genre}: {len(tracks)} tracks")
-    
+
     if dry_run:
         log("\n=== DRY RUN - No changes made ===")
         return
-    
+
     if tidal_to_spotify:
         log("\nCreating/updating genre playlists on Spotify...")
         user_id = spotify_session.current_user()["id"]
-        
+
         for genre, track_ids in genre_tracks.items():
             playlist_name_clean = f"{playlist_name}-{genre}"
-            
+
             # Use pre-loaded playlists data (no API call)
             existing_playlist_data = playlists_data.get(playlist_name_clean.lower())
-            
+
             if existing_playlist_data:
                 playlist_id = existing_playlist_data["id"]
                 existing_isrcs = existing_playlist_data["isrcs"]
-                log(f"Found existing playlist: {playlist_name_clean} ({len(existing_isrcs)} tracks)")
+                log(
+                    f"Found existing playlist: {playlist_name_clean} ({len(existing_isrcs)} tracks)"
+                )
             else:
                 log(f"Creating playlist: {playlist_name_clean}")
                 new_playlist = spotify_session.user_playlist_create(
@@ -1865,57 +2045,67 @@ async def clean_playlist(
                 )
                 playlist_id = new_playlist["id"]
                 existing_isrcs = set()
-            
+
             new_track_ids = []
             duplicate_exact = 0
             duplicate_prefix = 0
-            
+
             for track_id in track_ids:
                 # Get track from source_tracks (no API call)
-                track_info = next((t for t in source_tracks if t["id"] == track_id), None)
+                track_info = next(
+                    (t for t in source_tracks if t["id"] == track_id), None
+                )
                 if not track_info:
                     continue
-                    
+
                 isrc = track_info.get("external_ids", {}).get("isrc")
-                
+
                 # Duplicate detection
                 if isrc:
                     # Check exact match
                     if isrc in all_existing_isrcs:
                         duplicate_exact += 1
                         continue
-                    
+
                     # Check prefix (remaster)
                     if len(isrc) >= 11:
                         prefix = isrc[:11]
-                        if any(prefix == existing_isrc[:11] for existing_isrc in all_existing_isrcs if existing_isrc and len(existing_isrc) >= 11):
+                        if any(
+                            prefix == existing_isrc[:11]
+                            for existing_isrc in all_existing_isrcs
+                            if existing_isrc and len(existing_isrc) >= 11
+                        ):
                             duplicate_prefix += 1
-                    
+
                     all_existing_isrcs.add(isrc)
-                
+
                 if isrc and isrc not in existing_isrcs:
                     new_track_ids.append(track_id)
                     existing_isrcs.add(isrc)
-            
+
             if new_track_ids:
-                log(f"Adding {len(new_track_ids)} tracks to {playlist_name_clean} (duplicates skipped: {duplicate_exact} exact, {duplicate_prefix} remaster)")
+                log(
+                    f"Adding {len(new_track_ids)} tracks to {playlist_name_clean} (duplicates skipped: {duplicate_exact} exact, {duplicate_prefix} remaster)"
+                )
                 for i in range(0, len(new_track_ids), 20):
                     spotify_session.playlist_add_items(
-                        playlist_id, new_track_ids[i:i + 20]
+                        playlist_id, new_track_ids[i : i + 20]
                     )
             else:
-                log(f"No new tracks for {playlist_name_clean} (duplicates: {duplicate_exact} exact, {duplicate_prefix} remaster)")
+                log(
+                    f"No new tracks for {playlist_name_clean} (duplicates: {duplicate_exact} exact, {duplicate_prefix} remaster)"
+                )
     else:
         log("\nMatching tracks to Tidal...")
-        
+
         from .matcher import matcher
         from .tidalapi_patch import add_multiple_tracks_to_playlist
-        
+
         genre_tidal_tracks = defaultdict(list)
-        
+
         log("Searching Tidal for tracks...")
         search_semaphore = asyncio.Semaphore(3)
-        
+
         async def search_tidal_track(track_id, isrc, track_name, artists):
             await search_semaphore.acquire()
             try:
@@ -1927,7 +2117,7 @@ async def clean_playlist(
                 return None
             finally:
                 search_semaphore.release()
-        
+
         tracks_to_search = []
         for track_id, isrc in track_isrc.items():
             if isrc:
@@ -1938,9 +2128,11 @@ async def clean_playlist(
                         artists = [a["name"] for a in track["artists"]]
                         break
                 tracks_to_search.append((track_id, isrc, track["name"], artists))
-        
+
         tidal_track_ids = {}
-        for track_id, isrc, track_name, artists in tqdm(tracks_to_search, desc="Searching Tidal"):
+        for track_id, isrc, track_name, artists in tqdm(
+            tracks_to_search, desc="Searching Tidal"
+        ):
             await asyncio.sleep(0.5)
             try:
                 result = await search_tidal_track(track_id, isrc, track_name, artists)
@@ -1948,48 +2140,50 @@ async def clean_playlist(
                     tidal_track_ids[track_id] = result
             except Exception as e:
                 log(f"Search error for {track_name}: {e}")
-        
+
         for genre, track_ids in genre_tracks.items():
             for track_id in track_ids:
                 if track_id in tidal_track_ids:
                     genre_tidal_tracks[genre].append(tidal_track_ids[track_id])
-        
+
         log("\nCreating/updating genre playlists on Tidal...")
         user = tidal_session.user
-        
+
         for genre, tidal_track_ids_list in genre_tidal_tracks.items():
             playlist_name_clean = f"{playlist_name}-{genre}"
-            
+
             existing_playlists = await get_all_playlists(user)
             existing_playlist = None
             for p in existing_playlists:
                 if p.name == playlist_name_clean:
                     existing_playlist = p
                     break
-            
+
             if existing_playlist:
                 log(f"Found existing playlist: {playlist_name_clean}")
                 add_multiple_tracks_to_playlist(existing_playlist, tidal_track_ids_list)
             else:
                 log(f"Creating playlist: {playlist_name_clean}")
-                new_playlist = user.playlist_create(playlist_name_clean, f"Genre: {genre}")
+                new_playlist = user.playlist_create(
+                    playlist_name_clean, f"Genre: {genre}"
+                )
                 add_multiple_tracks_to_playlist(new_playlist, tidal_track_ids_list)
-        
+
         log(f"\nMatched {len(tidal_track_ids)} of {len(source_tracks)} tracks to Tidal")
         not_matched = len(source_tracks) - len(tidal_track_ids)
         if not_matched > 0:
             log(f"Could not match {not_matched} tracks")
-    
+
     if is_favorites:
         log(f"\nDeleting {len(source_tracks)} favorites...")
         for i in tqdm(range(0, len(source_tracks), 50), desc="Deleting favorites"):
-            batch = [t["id"] for t in source_tracks[i:i + 50]]
+            batch = [t["id"] for t in source_tracks[i : i + 50]]
             spotify_session.current_user_saved_tracks_delete(batch)
     else:
         playlist_id = playlist_uri.split(":")[-1]
         log(f"\nDeleting playlist: {playlist_name}")
         spotify_session.user_playlist_unfollow(playlist_id)
-    
+
     log("=== DONE ===")
 
 
@@ -2000,4 +2194,8 @@ def clean_playlist_wrapper(
     tidal_to_spotify: bool = True,
     dry_run: bool = False,
 ):
-    return asyncio.run(clean_playlist(spotify_session, tidal_session, playlist_uri, tidal_to_spotify, dry_run))
+    return asyncio.run(
+        clean_playlist(
+            spotify_session, tidal_session, playlist_uri, tidal_to_spotify, dry_run
+        )
+    )
