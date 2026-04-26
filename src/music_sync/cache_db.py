@@ -93,7 +93,9 @@ class UnifiedTrackCache:
             Column("artist_id", String, unique=True),
             Column("artist_name", String),
             Column("genre_category", String),
-            Column("genre_source", String, default="spotify"),  # spotify, musicbrainz, name_match
+            Column(
+                "genre_source", String, default="spotify"
+            ),  # spotify, musicbrainz, name_match
             Column("spotify_genres", String),  # JSON string
             Column("musicbrainz_genres", String),  # JSON string
             Column("cached_at", DateTime, default=datetime.datetime.now),
@@ -691,9 +693,18 @@ class UnifiedTrackCache:
         """Simplify artist name for comparison"""
         return artist.lower().split("&")[0].strip().split(",")[0].strip()
 
-    def store_artist_genre(self, artist_id: str, artist_name: str, genre_category: str, spotify_genres: list, genre_source: str = "spotify", musicbrainz_genres: list = None):
+    def store_artist_genre(
+        self,
+        artist_id: str,
+        artist_name: str,
+        genre_category: str,
+        spotify_genres: list,
+        genre_source: str = "spotify",
+        musicbrainz_genres: list = None,
+    ):
         """Store artist genre mapping"""
         import json
+
         try:
             existing = self.get_artist_genre(artist_id)
             if existing:
@@ -706,7 +717,9 @@ class UnifiedTrackCache:
                                 genre_category=genre_category,
                                 genre_source=genre_source,
                                 spotify_genres=json.dumps(spotify_genres),
-                                musicbrainz_genres=json.dumps(musicbrainz_genres) if musicbrainz_genres else None,
+                                musicbrainz_genres=json.dumps(musicbrainz_genres)
+                                if musicbrainz_genres
+                                else None,
                                 cached_at=datetime.datetime.now(),
                             )
                         )
@@ -720,16 +733,25 @@ class UnifiedTrackCache:
                                 genre_category=genre_category,
                                 genre_source=genre_source,
                                 spotify_genres=json.dumps(spotify_genres),
-                                musicbrainz_genres=json.dumps(musicbrainz_genres) if musicbrainz_genres else None,
+                                musicbrainz_genres=json.dumps(musicbrainz_genres)
+                                if musicbrainz_genres
+                                else None,
                                 cached_at=datetime.datetime.now(),
                             )
                         )
         except Exception:
             pass
 
-    def store_artist_genre_musicbrainz(self, artist_id: str, artist_name: str, genre_category: str, musicbrainz_genres: list):
+    def store_artist_genre_musicbrainz(
+        self,
+        artist_id: str,
+        artist_name: str,
+        genre_category: str,
+        musicbrainz_genres: list,
+    ):
         """Store artist genre mapping from MusicBrainz"""
         import json
+
         try:
             existing = self.get_artist_genre(artist_id)
             if existing:
@@ -765,7 +787,9 @@ class UnifiedTrackCache:
         """Get cached artist genre"""
         with self.engine.connect() as conn:
             result = conn.execute(
-                select(self.artist_genres).where(self.artist_genres.c.artist_id == artist_id)
+                select(self.artist_genres).where(
+                    self.artist_genres.c.artist_id == artist_id
+                )
             ).fetchone()
             if result:
                 return result.genre_category
@@ -782,15 +806,26 @@ class UnifiedTrackCache:
         1. ISRC exact match → DUPLICATE
         2. ISRC prefix match → DUPLICATE
         3. Name+Artist fuzzy (only if version keywords in name) → DUPLICATE
-        
+
         Returns: dict with track info if duplicate, None if new
         """
         VERSION_KEYWORDS = [
-            "remaster", "remix", "edit", "version", "live", 
-            "acoustic", "mono", "stereo", "deluxe", "extended",
-            "radio edit", "original mix", "bonus", "instrumental"
+            "remaster",
+            "remix",
+            "edit",
+            "version",
+            "live",
+            "acoustic",
+            "mono",
+            "stereo",
+            "deluxe",
+            "extended",
+            "radio edit",
+            "original mix",
+            "bonus",
+            "instrumental",
         ]
-        
+
         # Stage 1: ISRC exact match
         if tidal_isrc:
             with self.engine.connect() as conn:
@@ -804,7 +839,7 @@ class UnifiedTrackCache:
                 ).fetchone()
                 if row:
                     return self._row_to_dict(row)
-        
+
         # Stage 2: ISRC prefix match (first 11 chars)
         if tidal_isrc and len(tidal_isrc) >= 11:
             prefix = tidal_isrc[:11]
@@ -821,18 +856,18 @@ class UnifiedTrackCache:
                 for row in rows:
                     if row.spotify_isrc and row.spotify_isrc[:11] == prefix:
                         return self._row_to_dict(row)
-        
+
         # Stage 3: Name+Artist fuzzy (only if version keywords present)
         if tidal_name and tidal_artists:
             name_lower = tidal_name.lower()
             has_version_keyword = any(kw in name_lower for kw in VERSION_KEYWORDS)
-            
+
             if has_version_keyword:
                 # Clean name (remove version keywords)
                 clean_name = self._simple_name(tidal_name)
                 if not clean_name:
                     return None
-                    
+
                 with self.engine.connect() as conn:
                     rows = conn.execute(
                         select(self.tracks).where(
@@ -842,20 +877,28 @@ class UnifiedTrackCache:
                             )
                         )
                     ).fetchall()
-                    
+
                     best_match = None
                     best_confidence = 0.0
-                    
-                    tidal_artists_set = set(self._simple_artist(a) for a in tidal_artists)
-                    
+
+                    tidal_artists_set = set(
+                        self._simple_artist(a) for a in tidal_artists
+                    )
+
                     for row in rows:
-                        spotify_artists_list = json.loads(row.spotify_artists) if row.spotify_artists else []
-                        spotify_artists_set = set(self._simple_artist(a) for a in spotify_artists_list)
-                        
+                        spotify_artists_list = (
+                            json.loads(row.spotify_artists)
+                            if row.spotify_artists
+                            else []
+                        )
+                        spotify_artists_set = set(
+                            self._simple_artist(a) for a in spotify_artists_list
+                        )
+
                         # Check artist overlap
                         if not tidal_artists_set.intersection(spotify_artists_set):
                             continue
-                        
+
                         # Check name similarity
                         spotify_simple = self._simple_name(row.spotify_name)
                         confidence = self._calculate_match_confidence(
@@ -866,23 +909,23 @@ class UnifiedTrackCache:
                             spotify_artists_list,
                             None,
                         )
-                        
+
                         if confidence > best_confidence and confidence > 0.7:
                             best_match = row
                             best_confidence = confidence
-                    
+
                     if best_match:
                         return self._row_to_dict(best_match)
-        
+
         return None
 
     def cleanup_deleted_spotify_tracks(self, current_spotify_ids: set[str]) -> int:
         """
         Mark Spotify tracks as unmatched if they're no longer in Spotify.
         Called after sync to clean up tracks that were deleted from Spotify.
-        
+
         current_spotify_ids: set of all currently existing Spotify track IDs
-        
+
         Returns: number of tracks cleaned up
         """
         with self.engine.connect() as conn:
@@ -892,31 +935,30 @@ class UnifiedTrackCache:
                     self.tracks.c.spotify_id.isnot(None)
                 )
             ).fetchall()
-            
+
             db_spotify_ids = {row.spotify_id for row in all_spotify_tracks}
-            
+
             # Find orphaned tracks (in DB but not in current Spotify)
             orphaned = db_spotify_ids - current_spotify_ids
-            
+
             if orphaned:
-                with conn.begin():
-                    conn.execute(
-                        update(self.tracks)
-                        .where(self.tracks.c.spotify_id.in_(orphaned))
-                        .values(
-                            spotify_id=None,
-                            spotify_name=None,
-                            spotify_artists=None,
-                            spotify_album=None,
-                            spotify_isrc=None,
-                            spotify_duration=None,
-                            match_confidence=None,
-                            match_method=None,
-                            matched_at=None,
-                            updated_at=datetime.datetime.now(),
-                        )
+                conn.execute(
+                    update(self.tracks)
+                    .where(self.tracks.c.spotify_id.in_(orphaned))
+                    .values(
+                        spotify_id=None,
+                        spotify_name=None,
+                        spotify_artists=None,
+                        spotify_album=None,
+                        spotify_isrc=None,
+                        spotify_duration=None,
+                        match_confidence=None,
+                        match_method=None,
+                        matched_at=None,
+                        updated_at=datetime.datetime.now(),
                     )
-            
+                )
+
             return len(orphaned)
 
 
