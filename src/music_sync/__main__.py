@@ -31,7 +31,9 @@ def log(*args, **kwargs):
 def main():
     setup_logging()
     logging.info("=" * 50)
-    logging.info(f"music-sync started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info(
+        f"music-sync started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
     logging.info("=" * 50)
 
     parser = argparse.ArgumentParser(
@@ -102,12 +104,12 @@ def main():
         config = yaml.safe_load(f)
 
     if args.clean:
-        if not hasattr(args, 'tidal_to_spotify') or args.tidal_to_spotify is None:
+        if not hasattr(args, "tidal_to_spotify") or args.tidal_to_spotify is None:
             sys.exit("--clean requires a direction: 'tidal spotify' or 'spotify tidal'")
-        
+
         spotify_session = _auth.open_spotify_session(config["spotify"])
         tidal_session = None
-        
+
         if args.tidal_to_spotify:
             tidal_session = _auth.open_tidal_session()
             if not tidal_session.check_login():
@@ -116,25 +118,14 @@ def main():
             tidal_session = _auth.open_tidal_session()
             if not tidal_session.check_login():
                 sys.exit("Could not connect to Tidal")
-        
-        if not args.dry_run and not args.uri:
-            confirm = input(
-                "⚠️  This will DELETE all your favorites after organizing into playlists.\n"
-                "    Are you sure? (yes/no): "
-            )
-            if confirm.lower() != "yes":
-                log("Aborted.")
-                sys.exit(0)
-        
-        log(
-            f"\n=== CLEAN ({'DRY RUN' if args.dry_run else 'LIVE'}) ===\n"
-        )
+
+        log(f"\n=== CLEAN ({'DRY RUN' if args.dry_run else 'LIVE'}) ===\n")
         _sync.clean_playlist_wrapper(
-            spotify_session, 
-            tidal_session, 
+            spotify_session,
+            tidal_session,
             playlist_uri=args.uri,
             tidal_to_spotify=args.tidal_to_spotify,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
         )
         return
 
@@ -146,11 +137,16 @@ def main():
         log("Opening Spotify session")
         spotify_session = _auth.open_spotify_session(config["spotify"])
 
-        log(
-            f"\n=== TIDAL TO SPOTIFY SYNC ({'DRY RUN' if args.dry_run else 'LIVE'}) ===\n"
+log(
+            f"\n=== CLEAN ({'DRY RUN' if args.dry_run else 'LIVE'}) ==="
         )
         _sync.sync_tidal_to_spotify_wrapper(
-            tidal_session, spotify_session, config, dry_run=args.dry_run, playlist_id=args.uri, sync_favorites=args.sync_favorites
+            tidal_session,
+            spotify_session,
+            config,
+            dry_run=args.dry_run,
+            playlist_id=args.uri,
+            sync_favorites=args.sync_favorites,
         )
     else:
         log("Opening Spotify session")
@@ -198,7 +194,9 @@ def main():
             _sync.sync_favorites_wrapper(spotify_session, tidal_session, config)
 
     logging.info("=" * 50)
-    logging.info(f"music-sync finished at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info(
+        f"music-sync finished at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
     logging.info("=" * 50)
 
 
