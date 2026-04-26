@@ -69,24 +69,25 @@ music-sync spotify tidal --dry-run           # Preview what would be synced
 
 **Requires:** `musicbrainzngs` (installed by default with `pip install -e .`)
 
-Organize your favorites or any playlist into genre-based playlists on the target platform.
+Organize your favorites or any playlist into genre-based playlists **on the same platform**.
 
 ```bash
-# Clean favorites (tidal -> spotify direction)
-music-sync tidal spotify --clean                    # Organize favorites into genre playlists
-music-sync tidal spotify --clean --dry-run           # Preview without making changes
+# Spotify favorites → Spotify genre playlists
+music-sync spotify --clean                    # Organize favorites into genre playlists
+music-sync spotify --clean --dry-run         # Preview without making changes
+music-sync spotify --clean --uri <playlist>  # Clean specific playlist
 
-# Clean specific playlist
-music-sync tidal spotify --clean --uri <playlist_id> # Clean specific Spotify playlist
-music-sync tidal spotify --clean --uri 3jXenxrSHGNyAwWbh2Iitn --dry-run
-
-# Spotify -> Tidal direction
-music-sync spotify tidal --clean                     # Match to Tidal, create genre playlists on Tidal
+# Tidal favorites → Tidal genre playlists
+music-sync tidal --clean                    # Organize favorites into genre playlists
+music-sync tidal --clean --dry-run          # Preview without making changes
+music-sync tidal --clean --uri <playlist>   # Clean specific playlist
 ```
 
 Genre playlists are named as `{original_playlist_name}-{GENRE}` (e.g., `My Favorites-ROCK`, `TestPlaylist-DANCE`).
 
-After creating genre playlists, the source (favorites or playlist) is deleted from the source platform.
+After creating genre playlists, **manually delete** the source in Spotify/Tidal:
+- Spotify: Bibliothek → Lieblingssongs → alle auswählen → Entfernen
+- Tidal: Playlist öffnen → ⋮ → Von Bibliothek entfernen
 
 ### Dry Run
 

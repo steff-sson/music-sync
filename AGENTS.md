@@ -55,17 +55,23 @@ music-sync --uri <playlist_uri>         # Sync specific playlist
 music-sync --sync-favorites            # Sync liked songs
 music-sync --tidal-to-spotify --dry-run # Legacy flag (still works)
 
-# Clean: Organize source into genre-based playlists
-music-sync tidal spotify --clean                    # Clean favorites (tidal→spotify)
-music-sync tidal spotify --clean --dry-run         # Preview without changes
-music-sync tidal spotify --clean --uri <playlist> # Clean specific playlist
-music-sync spotify tidal --clean                   # Clean via Tidal matching
+# Clean: Organize source into genre-based playlists (same platform)
+music-sync spotify --clean                    # Spotify favorites → Spotify genre playlists
+music-sync spotify --clean --dry-run         # Preview without changes
+music-sync spotify --clean --uri <playlist> # Clean specific playlist
+music-sync tidal --clean                     # Tidal favorites → Tidal genre playlists
+music-sync tidal --clean --dry-run          # Preview without changes
+music-sync tidal --clean --uri <playlist>  # Clean specific playlist
 ```
 
 ### Dependencies
+Dependencies are installed automatically with `pip install -e .`:
+- `spotipy`, `tidalapi`, `pyyaml`, `tqdm`, `sqlalchemy`
+- `musicbrainzngs` (required for `--clean` genre lookup via MusicBrainz)
+
+For dev dependencies:
 ```bash
-# Required for --clean (genre lookup via MusicBrainz)
-pip install musicbrainzngs
+pip install -e ".[dev]"
 ```
 
 ## Code Style Guidelines
@@ -165,14 +171,16 @@ src/music_sync/
 - `.cache.db` - Match failure cache (tracks that couldn't be matched)
 - These files are gitignored
 
-### Current Status (2026-04-20)
+### Current Status (2026-04-26)
 - Tidal → Spotify sync implemented
 - Spotify → Tidal sync implemented
 - UnifiedTrackCache with SQLite backend
 - BidirectionalMatcher for ISRC + fuzzy matching
 - Not-found tracking with user-readable log files
 - Rate limit protection with exponential backoff
-- **--clean-favorites:** Organizes Spotify favorites into genre-based playlists
+- **--clean:** Organizes favorites into genre-based playlists on the SAME platform
+  - `spotify --clean`: Spotify favorites → Spotify genre playlists
+  - `tidal --clean`: Tidal favorites → Tidal genre playlists
 - **Genre Sources:** MusicBrainz (primary) + Name Matching + Artist Name Categories
 - **IMPORTANT:** Spotify artist() API is rate-limited (429, ~22h wait). Do NOT use.
 - **MusicBrainz:** Used for genre lookup (1 req/sec, reliable)
