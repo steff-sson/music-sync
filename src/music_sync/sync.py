@@ -2027,10 +2027,6 @@ async def clean_playlist(
         if new_other_artists:
             save_other_artists_list(new_other_artists)
 
-    if dry_run:
-        log("\n=== DRY RUN - No changes made ===")
-        return
-
     if tidal_to_spotify:
         log("\nCreating/updating genre playlists on Spotify...")
         user_id = spotify_session.current_user()["id"]
@@ -2044,16 +2040,11 @@ async def clean_playlist(
             if existing_playlist_data:
                 playlist_id = existing_playlist_data["id"]
                 existing_isrcs = existing_playlist_data["isrcs"]
-                log(
-                    f"Found existing playlist: {playlist_name_clean} ({len(existing_isrcs)} tracks)"
-                )
+                existing_track_count = len(existing_isrcs)
             else:
-                log(f"Creating playlist: {playlist_name_clean}")
-                new_playlist = spotify_session.user_playlist_create(
-                    user_id, playlist_name_clean, description=f"Genre: {genre}"
-                )
-                playlist_id = new_playlist["id"]
+                playlist_id = None
                 existing_isrcs = set()
+                existing_track_count = 0
 
             new_track_ids = []
             duplicate_exact = 0
@@ -2100,17 +2091,27 @@ async def clean_playlist(
                     existing_isrcs.add(isrc)
 
             log(
-                f"[DEBUG] {playlist_name_clean}: {len(track_ids)} genre tracks, {len(new_track_ids)} new (exact duplicates: {duplicate_exact}, prefix duplicates: {duplicate_prefix})"
+                f"{playlist_name_clean}: {len(track_ids)} genre tracks, {len(new_track_ids)} new, {duplicate_exact} exact dupes, {duplicate_prefix} prefix dupes (existing: {existing_track_count})"
             )
 
             if new_track_ids:
-                log(
-                    f"[DEBUG] Adding {len(new_track_ids)} tracks to {playlist_name_clean}"
-                )
-                for i in range(0, len(new_track_ids), 20):
-                    batch = new_track_ids[i : i + 20]
-                    log(f"[DEBUG] Batch {i // 20 + 1}: {len(batch)} tracks")
-                    spotify_session.playlist_add_items(playlist_id, batch)
+                if dry_run:
+                    log(
+                        f"  [DRY RUN] Would add {len(new_track_ids)} tracks to {playlist_name_clean}"
+                    )
+                else:
+                    log(
+                        f"  Adding {len(new_track_ids)} tracks to {playlist_name_clean}"
+                    )
+                    # Create playlist if it doesn't exist
+                    if not existing_playlist_data:
+                        new_playlist = spotify_session.user_playlist_create(
+                            user_id, playlist_name_clean, description=f"Genre: {genre}"
+                        )
+                        playlist_id = new_playlist["id"]
+                    for i in range(0, len(new_track_ids), 20):
+                        batch = new_track_ids[i : i + 20]
+                        spotify_session.playlist_add_items(playlist_id, batch)
     else:
         log("\nMatching tracks to Tidal...")
 
