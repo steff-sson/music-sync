@@ -2093,7 +2093,9 @@ async def clean_playlist(
             await search_semaphore.acquire()
             try:
                 query = f"{track_name} {' '.join(artists)}"
-                search_results = tidal_session.search(query, tidalapi.Track, limit=10)
+                search_results = tidal_session.search(
+                    query, models=[tidalapi.media.Track], limit=10
+                )["tracks"]
                 for result in search_results:
                     if result.isrc == isrc:
                         return result.id

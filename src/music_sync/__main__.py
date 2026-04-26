@@ -79,7 +79,7 @@ def main():
     parser.add_argument(
         "direction",
         nargs="*",
-        help="direction: tidal spotify OR spotify tidal",
+        help="direction: tidal spotify OR spotify tidal OR for --clean: tidal or spotify (target is automatic)",
     )
 
     args = parser.parse_args()
@@ -89,7 +89,14 @@ def main():
     with open(args.config, "r") as f:
         config = yaml.safe_load(f)
 
-    if len(direction) == 2:
+    if args.clean:
+        if len(direction) != 1:
+            sys.exit("--clean requires exactly one source: 'tidal' or 'spotify'")
+        source = direction[0]
+        if source not in ["tidal", "spotify"]:
+            sys.exit("Invalid source for --clean: use 'tidal' or 'spotify'")
+        args.tidal_to_spotify = source == "tidal"
+    elif len(direction) == 2:
         input_platform, output_platform = direction
         if input_platform == "tidal" and output_platform == "spotify":
             args.tidal_to_spotify = True
@@ -99,13 +106,8 @@ def main():
             sys.exit(
                 f"Invalid direction: {input_platform} {output_platform}. Use 'tidal spotify' or 'spotify tidal'"
             )
-
-    with open(args.config, "r") as f:
-        config = yaml.safe_load(f)
-
-    if args.clean:
-        if not hasattr(args, "tidal_to_spotify") or args.tidal_to_spotify is None:
-            sys.exit("--clean requires a direction: 'tidal spotify' or 'spotify tidal'")
+    elif len(direction) == 1:
+        sys.exit("Missing output platform. Use 'tidal spotify' or 'spotify tidal'")
 
         spotify_session = _auth.open_spotify_session(config["spotify"])
         tidal_session = None
