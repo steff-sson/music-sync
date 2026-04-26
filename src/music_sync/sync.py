@@ -1979,7 +1979,8 @@ async def clean_playlist(
 
     other_artists = list(genre_artists.get("OTHER", set()))
 
-    if other_artists:
+    # Skip MusicBrainz lookup for dry-run to make testing faster
+    if other_artists and not dry_run:
         for artist_name in tqdm(other_artists, desc="MusicBrainz"):
             if not artist_name or not artist_name.strip():
                 continue
