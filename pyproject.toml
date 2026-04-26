@@ -13,8 +13,13 @@ dependencies = [
   "pyyaml~=6.0",
   "tqdm~=4.64",
   "sqlalchemy~=2.0",
+  "musicbrainzngs",
+]
+
+[project.optional-dependencies]
+dev = [
   "pytest~=8.0",
-  "pytest-mock~=3.8"
+  "pytest-mock~=3.8",
 ]
 
 [tools.setuptools.packages."music_sync"]

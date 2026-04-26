@@ -21,9 +21,17 @@ git clone https://github.com/steff-sson/music-sync.git
 cd music-sync
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
 pip install -e .
 ```
+
+With dev dependencies (for running tests):
+
+```bash
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+**Note:** The `--clean` feature requires `musicbrainzngs`, which is included in the default dependencies.
 
 ## Setup
 
@@ -58,6 +66,8 @@ music-sync spotify tidal --dry-run           # Preview what would be synced
 ```
 
 ### Clean - Organize into Genre Playlists
+
+**Requires:** `musicbrainzngs` (installed by default with `pip install -e .`)
 
 Organize your favorites or any playlist into genre-based playlists on the target platform.
 
