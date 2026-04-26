@@ -2069,23 +2069,30 @@ async def clean_playlist(
                 isrc = track_info.get("external_ids", {}).get("isrc")
 
                 # Duplicate detection
+                # For --clean: only check against target playlist, not all playlists
                 if isrc:
-                    # Check exact match
-                    if isrc in all_existing_isrcs:
-                        duplicate_exact += 1
-                        continue
+                    if clean_source == "spotify":
+                        # Only check against the target playlist (existing_isrcs)
+                        if isrc in existing_isrcs:
+                            duplicate_exact += 1
+                            continue
+                    else:
+                        # Check against all existing ISRCs (normal sync behavior)
+                        if isrc in all_existing_isrcs:
+                            duplicate_exact += 1
+                            continue
 
-                    # Check prefix (remaster)
-                    if len(isrc) >= 11:
-                        prefix = isrc[:11]
-                        if any(
-                            prefix == existing_isrc[:11]
-                            for existing_isrc in all_existing_isrcs
-                            if existing_isrc and len(existing_isrc) >= 11
-                        ):
-                            duplicate_prefix += 1
+                        # Check prefix (remaster)
+                        if len(isrc) >= 11:
+                            prefix = isrc[:11]
+                            if any(
+                                prefix == existing_isrc[:11]
+                                for existing_isrc in all_existing_isrcs
+                                if existing_isrc and len(existing_isrc) >= 11
+                            ):
+                                duplicate_prefix += 1
 
-                    all_existing_isrcs.add(isrc)
+                        all_existing_isrcs.add(isrc)
 
                 if isrc and isrc not in existing_isrcs:
                     new_track_ids.append(track_id)
