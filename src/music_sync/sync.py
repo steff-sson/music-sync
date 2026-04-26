@@ -1960,13 +1960,8 @@ async def clean_playlist(
         genre_artists[genre].add(artist_name)
 
     other_artists = list(genre_artists.get("OTHER", set()))
-    log("\n=== STAGE 1: NAME-BASED GENRE DISTRIBUTION ===")
-    for genre, tracks in sorted(genre_tracks.items(), key=lambda x: -len(x[1])):
-        log(f"  {genre}: {len(tracks)} tracks")
-    log(f"\nOther artists to lookup in MusicBrainz: {len(other_artists)}")
 
     if other_artists:
-        log("\n=== STAGE 2: MUSICBRAINZ LOOKUP ===")
         for artist_name in tqdm(other_artists, desc="MusicBrainz"):
             if not artist_name or not artist_name.strip():
                 continue
@@ -1989,7 +1984,6 @@ async def clean_playlist(
                         artist_id, artist_name, "OTHER", []
                     )
 
-        log("\n=== STAGE 3: RECATEGORIZING WITH MUSICBRAINZ DATA ===")
         new_genre_tracks = defaultdict(list)
         new_genre_artists = defaultdict(set)
 
@@ -2013,10 +2007,6 @@ async def clean_playlist(
         new_other_artists = list(new_genre_artists.get("OTHER", set()))
         if new_other_artists:
             save_other_artists_list(new_other_artists)
-
-    log("\n=== FINAL GENRE DISTRIBUTION ===")
-    for genre, tracks in sorted(genre_tracks.items(), key=lambda x: -len(x[1])):
-        log(f"  {genre}: {len(tracks)} tracks")
 
     if dry_run:
         log("\n=== DRY RUN - No changes made ===")
@@ -2084,17 +2074,10 @@ async def clean_playlist(
                     existing_isrcs.add(isrc)
 
             if new_track_ids:
-                log(
-                    f"Adding {len(new_track_ids)} tracks to {playlist_name_clean} (duplicates skipped: {duplicate_exact} exact, {duplicate_prefix} remaster)"
-                )
                 for i in range(0, len(new_track_ids), 20):
                     spotify_session.playlist_add_items(
                         playlist_id, new_track_ids[i : i + 20]
                     )
-            else:
-                log(
-                    f"No new tracks for {playlist_name_clean} (duplicates: {duplicate_exact} exact, {duplicate_prefix} remaster)"
-                )
     else:
         log("\nMatching tracks to Tidal...")
 
@@ -2174,17 +2157,19 @@ async def clean_playlist(
         if not_matched > 0:
             log(f"Could not match {not_matched} tracks")
 
-    if is_favorites:
-        log(f"\nDeleting {len(source_tracks)} favorites...")
-        for i in tqdm(range(0, len(source_tracks), 50), desc="Deleting favorites"):
-            batch = [t["id"] for t in source_tracks[i : i + 50]]
-            spotify_session.current_user_saved_tracks_delete(batch)
+    total_in_genres = sum(len(tracks) for tracks in genre_tracks.values())
+    log("\n=== CLEAN ERFOLGREICH ===")
+    log(f"Alle {len(source_tracks)} Tracks wurden in Genre-Playlists organisiert.")
+    if total_in_genres != len(source_tracks):
+        log(
+            f"⚠️ WARNUNG: {len(source_tracks)} Quell-Tracks, aber {total_in_genres} in Genres!"
+        )
     else:
-        playlist_id = playlist_uri.split(":")[-1]
-        log(f"\nDeleting playlist: {playlist_name}")
-        spotify_session.user_playlist_unfollow(playlist_id)
-
-    log("=== DONE ===")
+        log(f"✓ Verification OK: {total_in_genres} Tracks verteilt")
+    log("")
+    log("Bitte lösche die Quelle manuell in Spotify:")
+    log("→ Bibliothek → Lieblingssongs (für Favorites)")
+    log("→ Playlist öffnen → ⋮ → Von Bibliothek entfernen (für Playlists)")
 
 
 def clean_playlist_wrapper(
