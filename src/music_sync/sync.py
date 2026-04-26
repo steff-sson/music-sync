@@ -1878,7 +1878,20 @@ async def clean_playlist(
 
     # Pre-load all Spotify data (API calls once)
     spotify_data = await asyncio.to_thread(preload_spotify_data, spotify_session)
-    all_existing_isrcs = spotify_data["all_isrcs"]
+
+    # For --clean: only check duplicates against NON-genre playlists
+    # (exclude playlists starting with "favorites-" to avoid false duplicates)
+    if clean_source == "spotify":
+        # Build all_isrcs excluding genre playlists (favorites-*)
+        all_existing_isrcs = set()
+        for pl_name, pl_data in spotify_data["playlists"].items():
+            if not pl_name.startswith("favorites-"):
+                all_existing_isrcs |= pl_data["isrcs"]
+        # Also add favorites ISRCs to avoid duplicates with favorites
+        all_existing_isrcs |= spotify_data["favorites_isrcs"]
+    else:
+        all_existing_isrcs = spotify_data["all_isrcs"]
+
     favorites_isrcs = spotify_data["favorites_isrcs"]
     playlists_data = spotify_data["playlists"]
 
