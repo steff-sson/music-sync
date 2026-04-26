@@ -1866,10 +1866,15 @@ async def clean_playlist(
     spotify_session: spotipy.Spotify,
     tidal_session,
     playlist_uri: str | None,
-    tidal_to_spotify: bool,
+    clean_source: str = "spotify",
     dry_run: bool = False,
 ):
-    """Organize source into genre-based playlists and clean source"""
+    """Organize source into genre-based playlists on the same platform"""
+
+    # For --clean: destination is the SAME as source (stay on same platform)
+    # clean_source="spotify" → stay on Spotify → create on Spotify → tidal_to_spotify=True
+    # clean_source="tidal" → stay on Tidal → create on Tidal → tidal_to_spotify=False
+    tidal_to_spotify = clean_source == "spotify"
 
     # Pre-load all Spotify data (API calls once)
     spotify_data = await asyncio.to_thread(preload_spotify_data, spotify_session)
@@ -2178,11 +2183,11 @@ def clean_playlist_wrapper(
     spotify_session: spotipy.Spotify,
     tidal_session,
     playlist_uri: str | None = None,
-    tidal_to_spotify: bool = True,
+    clean_source: str = "spotify",
     dry_run: bool = False,
 ):
     return asyncio.run(
         clean_playlist(
-            spotify_session, tidal_session, playlist_uri, tidal_to_spotify, dry_run
+            spotify_session, tidal_session, playlist_uri, clean_source, dry_run
         )
     )

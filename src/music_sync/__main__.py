@@ -95,7 +95,8 @@ def main():
         source = direction[0]
         if source not in ["tidal", "spotify"]:
             sys.exit("Invalid source for --clean: use 'tidal' or 'spotify'")
-        args.tidal_to_spotify = source == "tidal"
+        # For --clean: source stays on same platform, just reorganized into genre playlists
+        args.clean_source = source
     elif len(direction) == 2:
         input_platform, output_platform = direction
         if input_platform == "tidal" and output_platform == "spotify":
@@ -109,24 +110,21 @@ def main():
     elif len(direction) == 1:
         sys.exit("Missing output platform. Use 'tidal spotify' or 'spotify tidal'")
 
+    if args.clean:
+        # For --clean: source stays on same platform
+        # spotify --clean = Spotify Favorites → Spotify Genre-Playlists
+        # tidal --clean = Tidal Favorites → Tidal Genre-Playlists
         spotify_session = _auth.open_spotify_session(config["spotify"])
-        tidal_session = None
+        tidal_session = _auth.open_tidal_session()
+        if not tidal_session.check_login():
+            sys.exit("Could not connect to Tidal")
 
-        if args.tidal_to_spotify:
-            tidal_session = _auth.open_tidal_session()
-            if not tidal_session.check_login():
-                sys.exit("Could not connect to Tidal")
-        else:
-            tidal_session = _auth.open_tidal_session()
-            if not tidal_session.check_login():
-                sys.exit("Could not connect to Tidal")
-
-        log(f"\n=== CLEAN ({'DRY RUN' if args.dry_run else 'LIVE'}) ===\n")
+        log(f"\n=== CLEAN ({'DRY RUN' if args.dry_run else 'LIVE'}) ===")
         _sync.clean_playlist_wrapper(
             spotify_session,
             tidal_session,
             playlist_uri=args.uri,
-            tidal_to_spotify=args.tidal_to_spotify,
+            clean_source=args.clean_source,
             dry_run=args.dry_run,
         )
         return
