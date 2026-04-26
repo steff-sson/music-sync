@@ -2098,11 +2098,18 @@ async def clean_playlist(
                     new_track_ids.append(track_id)
                     existing_isrcs.add(isrc)
 
+            log(
+                f"[DEBUG] {playlist_name_clean}: {len(track_ids)} genre tracks, {len(new_track_ids)} new (exact duplicates: {duplicate_exact}, prefix duplicates: {duplicate_prefix})"
+            )
+
             if new_track_ids:
+                log(
+                    f"[DEBUG] Adding {len(new_track_ids)} tracks to {playlist_name_clean}"
+                )
                 for i in range(0, len(new_track_ids), 20):
-                    spotify_session.playlist_add_items(
-                        playlist_id, new_track_ids[i : i + 20]
-                    )
+                    batch = new_track_ids[i : i + 20]
+                    log(f"[DEBUG] Batch {i // 20 + 1}: {len(batch)} tracks")
+                    spotify_session.playlist_add_items(playlist_id, batch)
     else:
         log("\nMatching tracks to Tidal...")
 
