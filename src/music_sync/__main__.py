@@ -137,9 +137,7 @@ def main():
         log("Opening Spotify session")
         spotify_session = _auth.open_spotify_session(config["spotify"])
 
-log(
-            f"\n=== CLEAN ({'DRY RUN' if args.dry_run else 'LIVE'}) ==="
-        )
+        log(f"\n=== SYNC ({'DRY RUN' if args.dry_run else 'LIVE'}) ===")
         _sync.sync_tidal_to_spotify_wrapper(
             tidal_session,
             spotify_session,
