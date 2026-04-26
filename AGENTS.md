@@ -172,8 +172,21 @@ src/music_sync/
 - These files are gitignored
 
 ### Current Status (2026-04-26)
-- Tidal → Spotify sync implemented
-- Spotify → Tidal sync implemented
+
+#### Tidal → Spotify Sync
+- **Playlists:** ~17/43 synchronisiert (ohne --sync-favorites läuft weiter)
+- **Favorites:** 3710 Tidal Tracks → Spotify Favorites hinzugefügt
+- **Bug Fix:** `cleanup_deleted_spotify_tracks` SQLAlchemy-Fehler behoben (c184c85)
+
+#### Spotify → Tidal Sync
+- Funktioniert wie erwartet
+
+#### Bidirectional Sync Features
+- Tidal → Spotify: Playlists + Favorites synchronisieren
+- Spotify → Tidal: Playlists synchronisieren
+- `--clean`: Genre-Playlists auf gleicher Platform erstellen (spotify → spotify, tidal → tidal)
+
+#### Implementierte Features
 - UnifiedTrackCache with SQLite backend
 - BidirectionalMatcher for ISRC + fuzzy matching
 - Not-found tracking with user-readable log files
@@ -185,3 +198,22 @@ src/music_sync/
 - **IMPORTANT:** Spotify artist() API is rate-limited (429, ~22h wait). Do NOT use.
 - **MusicBrainz:** Used for genre lookup (1 req/sec, reliable)
 - **Database:** artist_genres table stores genre_source ("musicbrainz", "name_match")
+
+#### Known Issues
+- None (all bugs fixed as of 2026-04-26)
+
+#### How to Continue Sync
+```bash
+# Tidal Playlists (fertige werden übersprungen)
+source .venv/bin/activate && music-sync tidal spotify
+
+# Tidal Favorites (bereits 3710 Tracks hinzugefügt)
+source .venv/bin/activate && music-sync tidal spotify --sync-favorites
+
+# Spotify → Tidal
+source .venv/bin/activate && music-sync spotify tidal
+
+# Clean (Genre-Playlists)
+source .venv/bin/activate && music-sync spotify --clean
+source .venv/bin/activate && music-sync tidal --clean
+```
